@@ -1,0 +1,7 @@
+*.exe
+fin
+fin/*
+aion2tracker.db
+aion2tracker.db-shm 
+aion2tracker.db-wal
+build/*
