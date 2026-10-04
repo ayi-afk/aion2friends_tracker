@@ -1,121 +1,127 @@
 # AION 2 Stream Tracker
 
-Jeden plik `aion2tracker.exe` (V + SQLite, HTML wbudowany w exe). Co 15 minut zbiera z **oficjalnego API AION 2**
-(`aion2.plaync.com`, to samo, z którego korzysta shugo.gg) dane postaci streamerów i pokazuje je na żywym wykresie.
+A single executable (`aion2tracker.exe` / Linux `aion2tracker`, written in V, SQLite and HTML compiled in). Every 15 minutes
+it collects streamers' character data from the **official AION 2 API** (`aion2.plaync.com` — the same API shugo.gg uses)
+and shows it on a live chart.
 
-## Uruchomienie
+## Running
 
 ```
-aion2tracker.exe --port 8080 --password TajneHaslo
+aion2tracker.exe --port 8080 --password SecretPassword
 ```
 
-| parametr | opis |
+| flag | description |
 |---|---|
-| `--help` | pomoc |
-| `--port`, `-p` | port HTTP (domyślnie 8080) |
-| `--password` | hasło do `/admin/` (albo zmienna środowiskowa `A2T_PASSWORD`) |
-| `--db` | plik bazy (domyślnie `aion2tracker.db` obok exe — tworzony automatycznie) |
-| `--interval` | co ile minut zbierać dane (domyślnie 15, cykle wyrównane do :00/:15/:30/:45) |
-| `--host` | adres nasłuchu (domyślnie `0.0.0.0`) |
+| `--help` | help |
+| `--port`, `-p` | HTTP port (default 8080) |
+| `--password` | password for `/admin/` (or the `A2T_PASSWORD` environment variable) |
+| `--db` | database file (default `aion2tracker.db` next to the executable — created automatically) |
+| `--interval` | collection interval in minutes (default 15; cycles are aligned to :00/:15/:30/:45) |
+| `--host` | listen address (default `0.0.0.0`) |
 
-- `http://<host>:8080/` — publiczny wykres (tylko odczyt).
-- `http://<host>:8080/admin/` — panel admina:
-  - **z hasłem** działa z każdego adresu, wymaga logowania; **5 złych haseł z jednego IP = blokada tego IP na 1 minutę**
-    (IP = adres połączenia; za reverse proxy na tej samej maszynie — ostatni wpis `X-Forwarded-For`, którego klient nie podrobi).
-    Hasło idzie otwartym tekstem, jeśli nie ma HTTPS — wystawiając panel do internetu, postaw przed nim reverse proxy z TLS.
-  - **bez hasła** działa tylko z localhost (sprawdzany jest adres gniazda TCP; żądania z nagłówkami proxy są traktowane jako zdalne).
+- `http://<host>:8080/` — public chart (read-only).
+- `http://<host>:8080/admin/` — admin panel:
+  - **with a password** it is reachable from any address and requires login; **5 wrong passwords from one IP block that
+    IP for 1 minute** (IP = the connection's address; behind a reverse proxy on the same machine, the last
+    `X-Forwarded-For` entry, which the client cannot forge). Without HTTPS the password travels in plain text — when exposing
+    the panel to the internet, put a reverse proxy with TLS in front of it.
+  - **without a password** it only works from localhost (the TCP socket address is checked; requests carrying proxy
+    headers are treated as remote).
 
-## Co jest zbierane (na próbkę)
+## What is collected
 
-Combat Power, Item Level, poziom, klasa, Daevanion (suma + każda tablica `otwarte/wszystkie`), statystyki bogów (suma + każdy bóg),
-broń (nazwa, grade, `+enchant/max`, exceed ◆0–5, atak), stigmy (suma poziomów + lista).
+Combat Power, Item Level, level, class, Daevanion (total + each board `open/total`), god stats (total + each god),
+weapon (name, grade, `+enchant/max`, exceed ◆0–5, attack), stigmas (sum of levels + list).
 
-### Jak to leży w bazie (SQLite, schemat v3)
+### How it is stored (SQLite, schema v3)
 
-Zwykłe kolumny, bez JSON-a, i **zapis tylko zmian**: jeśli od poprzedniego odczytu nic się nie zmieniło, nie powstaje nowy
-wiersz (wykres trzyma wartość aż do następnej zmiany; „ostatni odczyt” pokazuje czas ostatniego udanego zapytania).
+Plain columns, no JSON, and **only changes are written**: if nothing changed since the previous read, no new row is
+created (the chart holds a value until the next change; "last update" shows the time of the last successful read).
 
-| tabela | zawartość | zapis |
+| table | contents | written |
 |---|---|---|
-| `samples` | cp, item_level, level, sumy (daevanion, bogowie, stigmy), enchant/exceed broni — ~32 B/wiersz | gdy cokolwiek się zmieni |
-| `sample_boards` + `boards` | otwarte węzły per tablica (słownik nazw i maksimów) | gdy zmienią się tablice |
-| `sample_gods` | 10 kolumn (justice … space) | gdy zmienią się bogowie |
-| `sample_weapon` | id, nazwa, grade, enchant, exceed, max, atak | gdy zmieni się broń |
-| `sample_stigmas` + `skills` | poziom + założona, per stigma (słownik nazw) | gdy zmienią się stigmy |
-| `avatars` | PNG/JPEG 192×192 jako BLOB (wgrany i portret z gry) | przy uploadzie / zmianie portretu |
-| `players`, `teams`, `meta` | konfiguracja i status | status raz na cykl, jedną transakcją |
+| `samples` | cp, item_level, level, totals (daevanion, gods, stigmas), weapon enchant/exceed — ~32 B/row | when anything changes |
+| `sample_boards` + `boards` | open nodes per board (dictionary of names and node counts) | when the boards change |
+| `sample_gods` | 10 columns (justice … space) | when the god stats change |
+| `sample_weapon` | id, name, grade, enchant, exceed, max, attack | when the weapon changes |
+| `sample_stigmas` + `skills` | level + equipped, per stigma (dictionary of names) | when the stigmas change |
+| `avatars` | 192×192 PNG/JPEG as BLOBs (uploaded and in-game portrait) | on upload / when the portrait changes |
+| `players`, `teams`, `meta` | configuration and status | status once per cycle, in one transaction |
 
-Cykl z 14 graczami i 1–2 zmianami zapisuje ~4–5 stron (16–20 KB) do WAL (wcześniej ~400 KB).
-**Spike'i CP z eventów PvP** (skok o >60% i >30k, np. 100k → 480k → 100k) nie są zapisywane; jeśli taka wartość utrzyma
-się przez 8 kolejnych odczytów (2 h), jest traktowana jako prawdziwa. Starsze bazy (v1/v2) są migrowane automatycznie
-przy starcie (także przy imporcie) — z usunięciem duplikatów i spike'ów; wcześniej obok powstaje kopia `*.db.bak-v2`.
+A cycle with 14 players and 1–2 changes writes ~4–5 pages (16–20 KB) to the WAL (previously ~400 KB).
 
-## Wykres
+**CP spikes from PvP events** (a jump of >60% and >30k, e.g. 100k → 480k → 100k) are not stored; if such a value persists
+for 8 consecutive reads (2 h), it is accepted as real. Older databases (v1/v2) are migrated automatically on startup
+(and on import), with duplicates and spikes removed; a copy `*.db.bak-v2` is made next to the database first.
 
-- tryby: CP, Item Level, Daevanion Σ / per tablica, Bogowie Σ / per bóg, Broń (+enchant + ◆exceed), Stigmy Σ, Poziom;
-- prawa krawędź = teraz (0), oś X względna (−15m, −6h, −2d…), suwak/presety okna czasu, Ctrl+kółko = zoom;
-- najechanie na kropkę → tooltip ze wszystkimi danymi i deltami; klik w gracza → wyróżnienie;
-- „Przyrost Δ” (zmiana od początku okna), „Od zera”, linie gładkie/schodki/proste, filtr teamów, ranking pod wykresem;
-- **Link do OBS** kopiuje URL samego wykresu z przezroczystym tłem (`?obs=1&bg=transparent&mode=…&range=…`).
+## Chart
 
-## Języki
+- modes: CP, Item Level, Daevanion Σ / per board, Gods Σ / per god, Weapon (+enchant + ◆exceed), Stigmas Σ, Level;
+- the right edge is "now" (0), the X axis is relative (−15m, −6h, −2d…), time-window slider and presets, Ctrl+wheel = zoom;
+- hovering a dot shows a tooltip with all the data and deltas; clicking a player highlights them;
+- "Gain Δ" (change since the start of the window), "From zero", smooth/steps/linear lines, team filter, ranking below the chart;
+- **OBS link** copies the URL of the chart alone with a transparent background (`?obs=1&bg=transparent&mode=…&range=…`).
 
-Wykres i panel admina mają przełącznik **PL / EN** (zapamiętywany w przeglądarce; `?lang=en` w URL, także w linku do OBS).
-Domyślny język strony ustawia się w adminie (automatycznie = język przeglądarki). Komunikaty błędów z serwera i błędy
-workera też są tłumaczone (nagłówek `X-Lang` / `Accept-Language`).
+## Languages
 
-## Panel admina
+The chart and the admin panel have a **PL / EN** switch (remembered by the browser; `?lang=en` in the URL, also in the OBS
+link). The page's default language is set in the admin panel (automatic = browser language). Server error messages and
+worker errors are translated too (`X-Lang` / `Accept-Language` header).
 
-Wyszukiwarka postaci działa jak na shugo.gg: domyślnie **🌍 Global** (wszystkie regiony naraz: EU, NA East/West, SA, Azja),
-wynik pokazuje klasę, poziom, serwer (region) i rasę; kliknięcie wyniku ustawia nick i serwer.
-Gracze (wyświetlany nick, nick w grze, serwer, avatar, team, kolor, sort),
-przełączniki **Aktywny** (worker zbiera) i **Na wykresie** (widoczny publicznie), teamy z kolorami, domyślny tryb/okno,
-eksport bazy oraz **import ze scalaniem** (teamy po nazwie, gracze po serwer+nick, próbki po gracz+czas — duplikaty pomijane).
+## Admin panel
 
-### Avatary
+The character search works like shugo.gg: **🌍 Global** by default (all regions at once: EU, NA East/West, SA, Asia);
+results show class, level, server (region) and race; clicking a result fills in the character name and server.
+Players (display name, character name, server, avatar, team, color, sort order),
+**Active** (the worker collects data) and **On chart** (publicly visible) switches, teams with colors, default mode/window,
+database export and **import with merging** (teams matched by name, players by server + character name, samples by
+player + time — duplicates are skipped).
 
-Upload w panelu wysyła oryginalny plik (PNG/JPG/GIF/BMP; WebP/AVIF/HEIC przeglądarka najpierw konwertuje do PNG, max 15 MB).
-Serwer dekoduje go, przycina środek do kwadratu, skaluje do 192×192 (mniejszych nie powiększa) i zapisuje w bazie
-jako PNG (z przezroczystością) albo JPEG (zdjęcia). Portret postaci z gry worker też pobiera, skaluje i trzyma w bazie
-(odświeżany raz na dobę). Wykres pokazuje: wgrany avatar → portret z gry → inicjały. Avatary są w eksporcie/imporcie bazy.
+### Avatars
 
-## Budowanie
+The upload sends the original file (PNG/JPG/GIF/BMP; WebP/AVIF/HEIC are first converted to PNG by the browser, max 15 MB).
+The server decodes it, crops the center to a square, scales it to 192×192 (smaller images are not upscaled) and stores it in
+the database as PNG (with transparency) or JPEG (photos). The worker also downloads the character's in-game portrait,
+scales it and keeps it in the database (refreshed once a day). The chart shows: uploaded avatar → in-game portrait →
+initials. Avatars are included in database export/import.
 
-Wymaga V (testowane na 0.5.0) i gcc z MSYS2 UCRT64. Jednorazowo: `v run %VROOT%\vlib\db\sqlite\install_thirdparty_sqlite.vsh`.
-Potem `build.bat`. Wynik to statyczny exe zależny tylko od systemowych DLL Windows.
+## Building
+
+Requires V (tested with 0.5.0) and gcc from MSYS2 UCRT64. Once: `v run %VROOT%\vlib\db\sqlite\install_thirdparty_sqlite.vsh`.
+Then `build.bat`. The result is a static executable that depends only on Windows system DLLs.
+
+`vendor/veb` is a copy of the `veb` module from V 0.5.0 with one fix (marked `aion2tracker patch` in `veb_picoev.v`):
+upstream lost the tail of a request body when the headers arrived in a separate packet, and uploads hung until the timeout.
+The build scripts pass `-path "vendor|@vlib|@vmodules"`, so `import veb` picks up the fixed version.
+
+To work on the HTML without rebuilding: `set A2T_WEB_DIR=web` — the pages are then read from disk.
 
 ### Linux
 
-`build_linux.bat` (na Windowsie) robi w pełni statyczną binarkę Linux x86-64: `build\linux\aion2tracker`
-(musl, zero zależności — działa na każdej dystrybucji, HTML i SQLite w środku). Wymaga dodatkowo **zig** w PATH
-(`winget install zig.zig`). V generuje tylko kod C dla Linuxa, a `zig cc` kompiluje go razem z libgc, mbedtls, SQLite,
-stb_image i cJSON; obiekty bibliotek są cache'owane w `build\linux\obj` (`build_linux.bat clean` = od zera).
+`build_linux.bat` (run on Windows) produces a fully static Linux x86-64 binary: `build\linux\aion2tracker`
+(musl, zero dependencies — runs on any distribution, HTML and SQLite inside). It additionally requires **zig** in PATH
+(`winget install zig.zig`). V only generates the C code for Linux, and `zig cc` compiles it together with libgc, mbedtls,
+SQLite, stb_image and cJSON; the library objects are cached in `build\linux\obj` (`build_linux.bat clean` = from scratch).
 
 ```
-scp build/linux/aion2tracker serwer:~/
-./aion2tracker --port 8080 --password TajneHaslo     # baza powstaje obok binarki
+scp build/linux/aion2tracker server:~/
+./aion2tracker --port 8080 --password SecretPassword     # the database is created next to the binary
 ```
 
-Na Linuxie klient HTTPS w V to mbedtls (na Windowsie schannel) z domyślnym timeoutem odczytu 550 ms — za mało dla API
-AION 2, dlatego build ustawia `-d mbedtls_client_read_timeout_ms=20000`.
+On Linux, V's HTTPS client is mbedtls (on Windows it is schannel) with a default read timeout of 550 ms — too short for
+the AION 2 API, so the build sets `-d mbedtls_client_read_timeout_ms=20000`.
 
 ### Docker
 
-`Dockerfile` pakuje statyczną binarkę z `build_linux.bat` do obrazu `scratch` (~4 MB: sama binarka, bez systemu).
-Baza to wyłącznie SQLite w `/data/aion2tracker.db` na wolumenie (persistent), kontener działa jako użytkownik bez roota.
+The `Dockerfile` packs the static binary from `build_linux.bat` into a `scratch` image (~4 MB: just the binary, no OS).
+The database is SQLite only, in `/data/aion2tracker.db` on a (persistent) volume; the container runs as a non-root user.
 
 ```
 build_linux.bat
 docker build -t aion2tracker .
-docker run -d --name aion2tracker --restart unless-stopped -p 8080:8080 -e A2T_PASSWORD=TajneHaslo -v aion2data:/data aion2tracker
+docker run -d --name aion2tracker --restart unless-stopped -p 8080:8080 -e A2T_PASSWORD=SecretPassword -v aion2data:/data aion2tracker
 ```
 
-albo `docker compose up -d --build` (hasło w `A2T_PASSWORD` albo w pliku `.env` obok `docker-compose.yml`).
-W Dockerze hasło jest konieczne — bez niego panel odpowiada tylko na połączenia z wnętrza kontenera.
-Dodatkowe flagi dopisuje się na końcu `docker run … aion2tracker --interval 10`. Backup: eksport z panelu albo kopia wolumenu.
-
-`vendor/veb` to kopia modułu `veb` z V 0.5.0 z jedną poprawką (oznaczoną `aion2tracker patch` w `veb_picoev.v`):
-upstream gubił końcówkę ciała żądania, gdy nagłówki przyszły osobnym pakietem, i upload wisiał do timeoutu.
-`build.bat` ustawia `-path "vendor|@vlib|@vmodules"`, więc `import veb` bierze poprawioną wersję.
-
-Do pracy nad HTML bez przebudowy: `set A2T_WEB_DIR=web` — strony są wtedy czytane z dysku.
+or `docker compose up -d --build` (password in `A2T_PASSWORD` or in an `.env` file next to `docker-compose.yml`).
+In Docker a password is required — without one the admin panel only answers connections from inside the container.
+Extra flags go at the end: `docker run … aion2tracker --interval 10`. Backups: export from the admin panel, or copy the volume.
