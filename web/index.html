@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AION 2 Stream Race</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0b0f17;
+  --panel: #10161f;
+  --panel-2: #151c27;
+  --line: #1f2a38;
+  --line-2: #2a3647;
+  --text: #e6ecf5;
+  --text-2: #a7b3c6;
+  --muted: #6c7a90;
+  --accent: #f5a623;
+  --good: #0ca30c;
+  --good-text: #3ddc84;
+  --bad: #e66767;
+  --mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  --sans: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 var(--sans); }
+body.obs, body.obs.transparent { background: transparent; }
+body.transparent { --bg: transparent; }
+a { color: var(--accent); }
+button { font: inherit; color: inherit; }
+
+.wrap { max-width: 1680px; margin: 0 auto; padding: 14px 20px 40px; }
+header.top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+header.top h1 { font-size: 20px; margin: 0; letter-spacing: .2px; font-weight: 700; }
+.live { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 999px; background: #1a1210; border: 1px solid #3a2414; font: 600 12px var(--mono); color: #ffcf8a; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: #ff5a3c; box-shadow: 0 0 0 0 rgba(255,90,60,.7); animation: pulse 1.6s infinite; }
+.live.stale i { background: var(--muted); animation: none; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,90,60,.6) } 70% { box-shadow: 0 0 0 9px rgba(255,90,60,0) } 100% { box-shadow: 0 0 0 0 rgba(255,90,60,0) } }
+.meta { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+.spacer { flex: 1; }
+.iconbtn { background: var(--panel); border: 1px solid var(--line); color: var(--text-2); padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; }
+.iconbtn:hover { border-color: var(--line-2); color: var(--text); }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 10px; }
+.seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg button { background: transparent; border: 0; padding: 7px 12px; border-radius: 7px; cursor: pointer; color: var(--text-2); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.seg button:hover { color: var(--text); background: var(--panel-2); }
+.seg button.on { background: #233046; color: #fff; box-shadow: inset 0 0 0 1px #34465f; }
+.seg.small button { padding: 5px 9px; font-size: 12px; }
+.subbar { display: none; gap: 6px; flex-wrap: wrap; margin: -2px 0 10px; }
+.subbar.show { display: flex; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text-2); cursor: pointer; font-size: 12px; font-weight: 600; user-select: none; }
+.chip:hover { color: var(--text); border-color: var(--line-2); }
+.chip.on { color: #fff; background: #1d2838; border-color: #3a4d68; }
+.chip.off { opacity: .45; text-decoration: line-through; }
+.chip .sw { width: 10px; height: 10px; border-radius: 3px; }
+.toggle { display: inline-flex; align-items: center; gap: 7px; color: var(--text-2); font-size: 12px; font-weight: 600; cursor: pointer; user-select: none; }
+.toggle input { accent-color: var(--accent); }
+
+.card { background: linear-gradient(180deg, #0e141d, #0b1018); border: 1px solid var(--line); border-radius: 14px; position: relative; }
+.chartbox { height: min(72vh, 760px); min-height: 380px; position: relative; }
+body.obs .chartbox { height: 100vh; min-height: 0; border: 0; border-radius: 0; background: transparent; }
+body.obs .wrap { padding: 0; max-width: none; }
+canvas#chart { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: pan-y; }
+.empty { position: absolute; inset: 0; display: none; place-items: center; text-align: center; color: var(--muted); padding: 20px; }
+.empty.show { display: grid; }
+.empty b { color: var(--text-2); display: block; font-size: 16px; margin-bottom: 6px; }
+
+/* range bar */
+.rangebar { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.rangebar .lbl { font: 600 12px var(--mono); color: var(--text-2); min-width: 120px; }
+.slider { position: relative; flex: 1; min-width: 200px; height: 30px; cursor: pointer; touch-action: none; }
+.slider .track { position: absolute; left: 0; right: 0; top: 13px; height: 4px; border-radius: 4px; background: #1c2532; }
+.slider .fill { position: absolute; right: 0; top: 13px; height: 4px; border-radius: 4px; background: linear-gradient(90deg, #f5a62300, #f5a623); }
+.slider .thumb { position: absolute; top: 5px; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: #f5a623; box-shadow: 0 0 0 4px #f5a62333, 0 2px 8px #000a; }
+.slider .ticks { position: absolute; left: 0; right: 0; top: 21px; height: 10px; }
+.slider .ticks span { position: absolute; top: 0; width: 1px; height: 5px; background: #2b384a; }
+.slider .ticks em { position: absolute; top: 4px; transform: translateX(-50%); font: 10px var(--mono); color: var(--muted); font-style: normal; }
+body.obs .rangebar, body.obs header.top, body.obs .toolbar, body.obs .subbar, body.obs .below { display: none !important; }
+
+/* tooltip */
+.tip { position: fixed; z-index: 50; pointer-events: none; min-width: 300px; max-width: 420px; background: rgba(13,18,26,.97); border: 1px solid #2c3a4e; border-radius: 12px; box-shadow: 0 12px 40px #000c; padding: 12px 14px; font-size: 12px; opacity: 0; transform: translateY(4px); transition: opacity .12s, transform .12s; }
+.tip.show { opacity: 1; transform: none; }
+.tip .hd { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.tip .av { width: 40px; height: 40px; border-radius: 50%; flex: none; background: #1b2431 center/cover; border: 2px solid var(--c, #888); }
+.tip .nm { font-weight: 700; font-size: 14px; color: #fff; }
+.tip .sub { color: var(--text-2); }
+.tip .when { color: var(--muted); font-family: var(--mono); font-size: 11px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 10px; }
+.tip .grid { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; align-items: baseline; }
+.tip .k { color: var(--muted); white-space: nowrap; }
+.tip .v { font-family: var(--mono); color: var(--text); text-align: right; }
+.tip .row-hl .k, .tip .row-hl .v { color: #fff; font-weight: 700; }
+.tip .row-hl { display: contents; }
+.tip .d-up { color: var(--good-text); }
+.tip .d-dn { color: var(--bad); }
+.tip .sec { margin-top: 8px; padding-top: 8px; border-top: 1px solid #1f2a38; }
+.tip .sec h4 { margin: 0 0 5px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; display: flex; justify-content: space-between; }
+.tip .sec h4 b { color: var(--text); font-family: var(--mono); }
+.tip .bars { display: grid; grid-template-columns: 70px 1fr 52px; gap: 3px 8px; align-items: center; }
+.tip .bar { height: 6px; background: #1b2431; border-radius: 3px; overflow: hidden; }
+.tip .bar i { display: block; height: 100%; background: var(--c, #3987e5); border-radius: 3px; }
+.tip .gods { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 2px 10px; }
+.tip .gods .v { text-align: right; }
+.tip .dia { letter-spacing: 1px; color: #7fd8ff; }
+.tip .dia s { text-decoration: none; color: #2c3a4e; }
+.tip .muted { color: var(--muted); }
+.tip .hl-sec { background: #ffffff08; border-radius: 8px; padding: 6px 8px; margin: 8px -8px 0; border-top: 0; }
+
+/* below chart */
+.below { margin-top: 18px; display: grid; gap: 18px; }
+.board { overflow-x: auto; }
+table.lb { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.lb th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.lb td { padding: 8px 12px; border-bottom: 1px solid #141c27; white-space: nowrap; }
+table.lb tr { cursor: pointer; }
+table.lb tbody tr:hover td { background: #121a25; }
+table.lb tr.hidden td { opacity: .4; }
+table.lb .num { text-align: right; font-family: var(--mono); }
+table.lb .rank { font: 700 13px var(--mono); color: var(--muted); width: 36px; }
+table.lb .who { display: flex; align-items: center; gap: 10px; }
+table.lb .av { width: 34px; height: 34px; border-radius: 50%; background: #1b2431 center/cover; border: 2px solid var(--c); flex: none; }
+table.lb .nm { font-weight: 700; color: #fff; }
+table.lb .cn { color: var(--muted); font-size: 12px; }
+.team-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+.team-tag i { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.up { color: var(--good-text); } .dn { color: var(--bad); } .flat { color: var(--muted); }
+.eye { background: none; border: 0; cursor: pointer; color: var(--muted); font-size: 15px; padding: 2px 6px; }
+.eye:hover { color: var(--text); }
+.foot { color: var(--muted); font-size: 12px; text-align: center; margin-top: 8px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+@media (max-width: 720px) {
+  .wrap { padding: 10px 12px 30px; }
+  header.top h1 { font-size: 16px; }
+  .chartbox { height: 62vh; min-height: 320px; }
+  .seg button { padding: 6px 8px; font-size: 12px; }
+  .tip { min-width: 0; max-width: calc(100vw - 20px); }
+  .rangebar .lbl { min-width: 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 id="title">AION 2 — Stream Race</h1>
+    <span class="live" id="live"><i></i><span id="liveTxt" data-i18n="live">LIVE</span></span>
+    <span class="meta" id="nextTxt"></span>
+    <span class="spacer"></span>
+    <div class="seg small" id="langSw" aria-label="Language"><button data-l="pl">PL</button><button data-l="en">EN</button></div>
+    <button class="iconbtn" id="obsBtn" data-i18n="obs" data-i18n-title="obs_title">⧉ Link do OBS</button>
+  </header>
+
+  <div class="toolbar">
+    <div class="seg" id="modes" role="tablist" data-i18n-aria="modes_aria"></div>
+    <div class="seg small" id="curve" data-i18n-aria="curve_aria">
+      <button data-v="smooth" data-i18n="smooth">Gładko</button><button data-v="step" data-i18n="step">Schodki</button><button data-v="linear" data-i18n="linear">Proste</button>
+    </div>
+    <label class="toggle" data-i18n-title="gain_title"><input type="checkbox" id="gain"> <span data-i18n="gain">Przyrost Δ</span></label>
+    <label class="toggle" data-i18n-title="zero_title"><input type="checkbox" id="zero"> <span data-i18n="zero">Od zera</span></label>
+  </div>
+  <div class="subbar" id="subbar"></div>
+  <div class="subbar show" id="teambar"></div>
+
+  <div class="card">
+    <div class="chartbox" id="chartbox">
+      <canvas id="chart" data-i18n-aria="chart_aria" role="img"></canvas>
+      <div class="empty" id="empty"></div>
+    </div>
+    <div class="rangebar">
+      <span class="lbl" id="rangeLbl">okno: 24h</span>
+      <div class="slider" id="slider" role="slider" tabindex="0" data-i18n-aria="slider_aria">
+        <div class="track"></div><div class="fill" id="sfill"></div><div class="ticks" id="sticks"></div><div class="thumb" id="sthumb"></div>
+      </div>
+      <div class="seg small" id="presets"></div>
+    </div>
+  </div>
+
+  <div class="below">
+    <div class="card board">
+      <table class="lb" id="lb">
+        <thead><tr><th>#</th><th data-i18n="th_player">Gracz</th><th data-i18n="th_team">Team</th><th class="num" id="lbValHead">Wartość</th><th class="num" data-i18n="th_delta">Δ w oknie</th><th class="num" data-i18n="th_level">Poziom</th><th data-i18n="th_last">Ostatni odczyt</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="foot" id="foot"></div>
+  </div>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+'use strict';
+// ------------------------------------------------------------------ utils
+const $ = s => document.querySelector(s);
+const qs = new URLSearchParams(location.search);
+const OBS = qs.has('obs');
+if (OBS) document.body.classList.add('obs');
+if (qs.get('bg') === 'transparent') document.body.classList.add('transparent');
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem('a2t.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('a2t.' + k, JSON.stringify(v)); } catch {} },
+};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ------------------------------------------------------------------ i18n (PL / EN)
+const I18N = {
+  pl: {
+    live: 'LIVE', obs: '⧉ Link do OBS', obs_title: 'Skopiuj link do tego widoku dla OBS (Browser Source)', copied: '✓ Skopiowano', obs_prompt: 'Link do OBS:',
+    smooth: 'Gładko', step: 'Schodki', linear: 'Proste',
+    gain: 'Przyrost Δ', gain_title: 'Pokaż przyrost od początku widocznego okna zamiast wartości',
+    zero: 'Od zera', zero_title: 'Oś Y zaczyna się od zera',
+    chart_aria: 'Wykres postępu graczy', modes_aria: 'Tryb wykresu', curve_aria: 'Styl linii', slider_aria: 'Zakres czasu',
+    window: 'okno', all: 'Wszystko', all_lc: 'wszystko',
+    th_player: 'Gracz', th_team: 'Team', th_value: 'Wartość', th_delta: 'Δ w oknie', th_level: 'Poziom', th_last: 'Ostatni odczyt',
+    foot: 'Dane: oficjalne API AION 2 (plaync) · odczyt co {0} min · najedź na kropkę, żeby zobaczyć szczegóły · Ctrl + kółko myszy na wykresie = zoom czasu · klik w gracza = wyróżnienie',
+    mode_cp: 'Combat Power', mode_ilvl: 'Item Level', mode_dv: 'Daevanion', mode_god: 'Bogowie', mode_weapon: 'Broń +', mode_stigma: 'Stigmy Σ', mode_level: 'Poziom',
+    sum: 'Σ Suma', no_team: 'Bez teamu', team_chip_title: 'Klik: pokaż/ukryj · Shift+klik: tylko ten team',
+    now: 'teraz', ago: '{0} temu',
+    tt_level: 'Poziom', tt_stigma: 'Stigmy Σ (poziomy)', weapon: 'Broń', attack: 'Atak', gods: 'Statystyki bogów', stigmas: 'Stigmy',
+    active_t: 'aktywny — dane są zbierane', inactive_t: 'nieaktywny — dane nie są zbierane', no_data: 'brak danych', eye_t: 'Pokaż/ukryj na wykresie',
+    empty_players: '<b>Brak graczy na wykresie</b>Dodaj streamerów w panelu <code>/admin/</code> (dostępny z localhost).',
+    empty_wait: '<b>Czekam na pierwszy odczyt…</b>Worker zbiera dane co {0} min.',
+    next_in: 'następny odczyt za {0}', updating: 'odczyt w toku…', last: ' · ostatni {0}',
+  },
+  en: {
+    live: 'LIVE', obs: '⧉ OBS link', obs_title: 'Copy a link to this view for OBS (Browser Source)', copied: '✓ Copied', obs_prompt: 'OBS link:',
+    smooth: 'Smooth', step: 'Steps', linear: 'Linear',
+    gain: 'Gain Δ', gain_title: 'Show the change since the start of the visible window instead of the value',
+    zero: 'From zero', zero_title: 'Y axis starts at zero',
+    chart_aria: 'Player progress chart', modes_aria: 'Chart mode', curve_aria: 'Line style', slider_aria: 'Time range',
+    window: 'window', all: 'All', all_lc: 'all',
+    th_player: 'Player', th_team: 'Team', th_value: 'Value', th_delta: 'Δ in window', th_level: 'Level', th_last: 'Last update',
+    foot: 'Data: official AION 2 API (plaync) · updated every {0} min · hover a dot for details · Ctrl + mouse wheel on the chart = time zoom · click a player to highlight',
+    mode_cp: 'Combat Power', mode_ilvl: 'Item Level', mode_dv: 'Daevanion', mode_god: 'Gods', mode_weapon: 'Weapon +', mode_stigma: 'Stigmas Σ', mode_level: 'Level',
+    sum: 'Σ Total', no_team: 'No team', team_chip_title: 'Click: show/hide · Shift+click: only this team',
+    now: 'now', ago: '{0} ago',
+    tt_level: 'Level', tt_stigma: 'Stigmas Σ (levels)', weapon: 'Weapon', attack: 'Attack', gods: 'God stats', stigmas: 'Stigmas',
+    active_t: 'active — data is being collected', inactive_t: 'inactive — data is not collected', no_data: 'no data', eye_t: 'Show/hide on the chart',
+    empty_players: '<b>No players on the chart</b>Add streamers in the <code>/admin/</code> panel (localhost only).',
+    empty_wait: '<b>Waiting for the first update…</b>The worker collects data every {0} min.',
+    next_in: 'next update in {0}', updating: 'updating…', last: ' · last {0}',
+  },
+};
+const normLang = l => (l || '').toLowerCase().startsWith('pl') ? 'pl' : (l || '').toLowerCase().startsWith('en') ? 'en' : '';
+let LANG = normLang(qs.get('lang')) || normLang(LS.get('lang', '')) || (normLang(navigator.language) === 'pl' ? 'pl' : 'en');
+let langExplicit = !!(normLang(qs.get('lang')) || normLang(LS.get('lang', '')));
+function T(key, ...args) {
+  let v = (I18N[LANG] && I18N[LANG][key]) ?? I18N.pl[key] ?? key;
+  args.forEach((a, i) => { v = v.replace('{' + i + '}', a); });
+  return v;
+}
+function applyStaticI18n() {
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = T(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = T(el.dataset.i18nTitle); });
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => { el.setAttribute('aria-label', T(el.dataset.i18nAria)); });
+  document.querySelectorAll('#langSw button').forEach(b => b.classList.toggle('on', b.dataset.l === LANG));
+}
+let nf = new Intl.NumberFormat(LANG === 'en' ? 'en-US' : 'pl-PL');
+const fmtInt = v => v == null || isNaN(v) ? '—' : nf.format(Math.round(v));
+const fmtK = v => {
+  if (v == null || isNaN(v)) return '—';
+  const a = Math.abs(v);
+  if (a >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+  if (a >= 1e4) return (v / 1e3).toFixed(1) + 'k';
+  return nf.format(Math.round(v));
+};
+const signed = (v, f) => (v > 0 ? '+' : v < 0 ? '−' : '±') + f(Math.abs(v));
+function fmtDur(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60) return sec + 's';
+  const m = Math.floor(sec / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
+  if (m < 60) return m + 'm';
+  if (h < 24) return h + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '');
+  return d + 'd' + (h % 24 ? ' ' + (h % 24) + 'h' : '');
+}
+const pad2 = n => String(n).padStart(2, '0');
+function fmtClock(ts, withDate) {
+  const d = new Date(ts * 1000);
+  const t = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  return withDate ? pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + ' ' + t : t;
+}
+const MONO = 'ui-monospace, "JetBrains Mono", "Cascadia Mono", Consolas, monospace';
+const SANS = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// Categorical palette (dark steps, validated against #0b0f17). Assigned by player order, never by rank.
+const PALETTE = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+
+function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function rgba(h, a) { const [r, g, b] = hexToRgb(h); return `rgba(${r},${g},${b},${a})`; }
+function shade(h, f) { // f in [-1,1]: darken / lighten
+  const c = hexToRgb(h).map(x => f >= 0 ? x + (255 - x) * f : x * (1 + f));
+  return '#' + c.map(x => clamp(Math.round(x), 0, 255).toString(16).padStart(2, '0')).join('');
+}
+
+// ------------------------------------------------------------------ modes
+const MODES = [
+  { key: 'cp', label: 'Combat Power', short: 'CP', get: s => s.cp, fmt: fmtK, full: fmtInt },
+  { key: 'ilvl', label: 'Item Level', short: 'iLvl', get: s => s.il, fmt: fmtInt, full: fmtInt },
+  { key: 'dv', label: 'Daevanion', short: 'Daevanion', subs: 'dv', get: (s, sub) => sub ? (s.dv.find(b => b.n === sub) || {}).o : s.dvt, fmt: fmtInt, full: fmtInt },
+  { key: 'god', label: 'Bogowie', short: 'Bogowie', subs: 'god', get: (s, sub) => sub ? (s.g.find(g => g.n === sub) || {}).v : s.gt, fmt: fmtInt, full: fmtInt },
+  { key: 'weapon', label: 'Broń +', short: 'Broń', get: s => s.we + s.wx, fmt: v => '+' + Math.round(v), full: v => '+' + Math.round(v), label2: s => weaponTxt(s) },
+  { key: 'stigma', label: 'Stigmy Σ', short: 'Stigmy', get: s => s.st, fmt: fmtInt, full: fmtInt },
+  { key: 'level', label: 'Poziom', short: 'Lv', get: s => s.lv, fmt: fmtInt, full: fmtInt },
+];
+for (const m of MODES) Object.defineProperty(m, 'label', { get: () => T('mode_' + m.key) });
+const modeOf = k => MODES.find(m => m.key === k) || MODES[0];
+function weaponTxt(s) { return '+' + s.we + (s.wx ? ' ◆' + s.wx : ''); }
+function diamonds(n) { let o = ''; for (let i = 0; i < 5; i++) o += i < n ? '◆' : '<s>◆</s>'; return o; }
+
+// ------------------------------------------------------------------ state
+const PRESETS = [['1h', 3600], ['6h', 21600], ['24h', 86400], ['3d', 259200], ['7d', 604800], ['30d', 2592000], ['all', 0]];
+const V = {
+  mode: 'cp', sub: '', range: 86400, gain: false, zero: false, curve: LS.get('curve', 'smooth'),
+  hiddenTeams: new Set(LS.get('hiddenTeams', [])), hiddenPlayers: new Set(LS.get('hiddenPlayers', [])),
+  focus: null,
+};
+const S = { title: '', players: [], teams: [], teamById: new Map(), byId: new Map(), series: new Map(), loadedRange: -1, skew: 0, interval: 900, nextCycle: 0, lastCycle: 0, firstTs: 0, defaults: null, imgs: new Map() };
+const nowSec = () => (Date.now() + S.skew) / 1000;
+
+function applyDefaults(st) {
+  if (S.defaults) return;
+  S.defaults = true;
+  const [dm, ds] = (st.default_mode || 'cp').split(':');
+  V.mode = modeOf(qs.get('mode') || LS.get('mode', dm)).key;
+  V.sub = qs.has('mode') ? (qs.get('sub') || '') : LS.get('sub', ds || '');
+  const r = qs.has('range') ? +qs.get('range') : LS.get('range', +st.default_range || 86400);
+  V.range = isFinite(r) ? r : 86400;
+  V.gain = qs.has('gain') ? qs.get('gain') === '1' : LS.get('gain', false);
+  V.zero = qs.has('zero') ? qs.get('zero') === '1' : LS.get('zero', false);
+  if (qs.has('curve')) V.curve = qs.get('curve');
+  if (qs.has('team')) { const keep = new Set(qs.get('team').split(',').map(Number)); V.hiddenTeams = new Set([...st.teams.map(t => t.id), 0].filter(id => !keep.has(id))); }
+}
+function persist() {
+  if (OBS) return;
+  LS.set('mode', V.mode); LS.set('sub', V.sub); LS.set('range', V.range); LS.set('gain', V.gain); LS.set('zero', V.zero);
+  LS.set('curve', V.curve); LS.set('hiddenTeams', [...V.hiddenTeams]); LS.set('hiddenPlayers', [...V.hiddenPlayers]);
+}
+
+function playerColor(p) { return p._color; }
+function assignColors() {
+  // own color > team color (lightness-shifted per teammate) > palette slot by player order
+  const perTeam = new Map();
+  let slot = 0;
+  for (const p of S.players) {
+    const team = S.teamById.get(p.team);
+    if (p.color) p._color = p.color;
+    else if (team) {
+      const i = perTeam.get(team.id) || 0; perTeam.set(team.id, i + 1);
+      const shifts = [0, 0.28, -0.25, 0.5, -0.42];
+      p._color = shade(team.color, shifts[i % shifts.length]);
+    } else p._color = PALETTE[slot++ % PALETTE.length];
+    p._ring = team ? team.color : p._color;
+  }
+}
+function avatarImg(p) {
+  if (!p.avatar) return null;
+  let im = S.imgs.get(p.avatar);
+  if (!im) {
+    im = new Image(); im.decoding = 'async';
+    im.onload = () => chart.request();
+    im.src = p.avatar; S.imgs.set(p.avatar, im);
+  }
+  return im.complete && im.naturalWidth ? im : null;
+}
+// a player is "live" when the worker read it successfully within ~2 intervals
+const isFresh = (p, now) => !!(p.active && p.last_ok && now - p.last_ok < S.interval * 2.2);
+const initials = n => (n || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
+// ------------------------------------------------------------------ data
+async function getJSON(u) { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error(u + ' ' + r.status); return r.json(); }
+async function loadState() {
+  const st = await getJSON('/api/state');
+  S.skew = st.now * 1000 - Date.now();
+  S.title = st.title; S.interval = st.interval; S.nextCycle = st.next_cycle; S.lastCycle = st.last_cycle;
+  S.teams = st.teams; S.teamById = new Map(st.teams.map(t => [t.id, t]));
+  S.players = st.players; S.byId = new Map(st.players.map(p => [p.id, p]));
+  assignColors();
+  applyDefaults(st);
+  document.title = st.title || 'AION 2 Stream Race';
+  $('#title').textContent = st.title || 'AION 2 — Stream Race';
+  $('#foot').textContent = T('foot', Math.round(st.interval / 60));
+  if (!langExplicit && normLang(st.default_lang) && normLang(st.default_lang) !== LANG) setLang(normLang(st.default_lang), false);
+}
+let seriesLoading = null;
+async function loadSeries(range) {
+  const want = range <= 0 ? 0 : Math.ceil(range * 1.25);
+  const res = await getJSON('/api/series?range=' + want);
+  // detail fields are only sent when they change: carry them forward
+  const carry = ['cls', 'dv', 'g', 'sj', 'wn', 'wg', 'wm', 'wa'];
+  for (const arr of Object.values(res.series)) {
+    for (let i = 1; i < arr.length; i++) for (const k of carry) if (!(k in arr[i])) arr[i][k] = arr[i - 1][k];
+    for (const s of arr) { s.dv ||= []; s.g ||= []; s.sj ||= []; }
+  }
+  S.series = new Map(Object.entries(res.series).map(([k, v]) => [+k, v]));
+  S.loadedRange = want;
+  let first = Infinity;
+  for (const arr of S.series.values()) if (arr.length) first = Math.min(first, arr[0].t);
+  if (want === 0) S.firstTs = isFinite(first) ? first : 0;
+}
+function needSeries(range) {
+  if (S.loadedRange === 0) return false;
+  if (range <= 0) return true;
+  return S.loadedRange < 0 || range > S.loadedRange;
+}
+async function ensureSeries(force) {
+  if (!force && !needSeries(V.range)) return;
+  if (seriesLoading) return seriesLoading;
+  seriesLoading = loadSeries(V.range).finally(() => { seriesLoading = null; });
+  await seriesLoading;
+}
+async function refresh(force) {
+  try {
+    await loadState();
+    await ensureSeries(true);
+    $('#live').classList.remove('stale');
+  } catch (e) { console.warn(e); $('#live').classList.add('stale'); }
+  buildModeBar(); buildTeamBar(); buildPresets(); updateSlider(); renderBoard(); updateEmpty();
+  chart.dataChanged();
+}
+
+function windowSec() {
+  if (V.range > 0) return V.range;
+  const span = nowSec() - (S.firstTs || nowSec() - 3600);
+  return Math.max(3600, span * 1.02);
+}
+function subOptions() {
+  const m = modeOf(V.mode);
+  if (!m.subs) return [];
+  const names = [];
+  const seen = new Set();
+  for (const arr of S.series.values()) {
+    const s = arr[arr.length - 1]; if (!s) continue;
+    for (const e of (m.subs === 'dv' ? s.dv : s.g)) if (!seen.has(e.n)) { seen.add(e.n); names.push(e.n); }
+  }
+  return names;
+}
+function visiblePlayers() {
+  return S.players.filter(p => !V.hiddenPlayers.has(p.id) && !V.hiddenTeams.has(p.team || 0));
+}
+function valueOf(s) { const m = modeOf(V.mode); const v = m.get(s, V.sub); return v == null ? null : v; }
+
+// ------------------------------------------------------------------ UI: bars
+function buildModeBar() {
+  const el = $('#modes');
+  el.innerHTML = MODES.map(m => `<button role="tab" data-k="${m.key}" class="${m.key === V.mode ? 'on' : ''}" aria-selected="${m.key === V.mode}">${esc(m.label)}</button>`).join('');
+  el.querySelectorAll('button').forEach(b => b.onclick = () => { if (V.mode !== b.dataset.k) { V.mode = b.dataset.k; V.sub = ''; onViewChange(true); } });
+  const sb = $('#subbar');
+  const subs = subOptions();
+  sb.classList.toggle('show', subs.length > 0);
+  sb.innerHTML = subs.length ? [`<span class="chip ${V.sub === '' ? 'on' : ''}" data-s="">${T('sum')}</span>`, ...subs.map(n => `<span class="chip ${V.sub === n ? 'on' : ''}" data-s="${esc(n)}">${esc(n)}</span>`)].join('') : '';
+  sb.querySelectorAll('.chip').forEach(c => c.onclick = () => { V.sub = c.dataset.s; onViewChange(true); });
+  document.querySelectorAll('#curve button').forEach(b => b.classList.toggle('on', b.dataset.v === V.curve));
+  $('#gain').checked = V.gain; $('#zero').checked = V.zero;
+  const m = modeOf(V.mode);
+  $('#lbValHead').textContent = V.sub || m.label;
+}
+function buildTeamBar() {
+  const el = $('#teambar');
+  const used = new Set(S.players.map(p => p.team || 0));
+  const teams = S.teams.filter(t => used.has(t.id));
+  if (!teams.length) { el.innerHTML = ''; return; }
+  const items = teams.map(t => ({ id: t.id, name: t.name, color: t.color }));
+  if (used.has(0)) items.push({ id: 0, name: T('no_team'), color: '#6c7a90' });
+  el.innerHTML = items.map(t => `<span class="chip ${V.hiddenTeams.has(t.id) ? 'off' : ''}" data-t="${t.id}" title="${T('team_chip_title')}"><i class="sw" style="background:${esc(t.color)}"></i>${esc(t.name)}</span>`).join('');
+  el.querySelectorAll('.chip').forEach(c => c.onclick = e => {
+    const id = +c.dataset.t;
+    if (e.shiftKey) { V.hiddenTeams = new Set(items.map(t => t.id).filter(x => x !== id)); }
+    else if (V.hiddenTeams.has(id)) V.hiddenTeams.delete(id); else V.hiddenTeams.add(id);
+    onViewChange(false);
+  });
+}
+function buildPresets() {
+  const el = $('#presets');
+  el.innerHTML = PRESETS.map(([l, r]) => `<button data-r="${r}" class="${V.range === r ? 'on' : ''}">${l === 'all' ? T('all') : l}</button>`).join('');
+  el.querySelectorAll('button').forEach(b => b.onclick = () => setRange(+b.dataset.r));
+}
+document.querySelectorAll('#curve button').forEach(b => b.onclick = () => { V.curve = b.dataset.v; onViewChange(false); });
+$('#gain').onchange = e => { V.gain = e.target.checked; onViewChange(false); };
+$('#zero').onchange = e => { V.zero = e.target.checked; onViewChange(false); };
+
+function onViewChange(reveal) {
+  persist(); buildModeBar(); buildTeamBar(); renderBoard();
+  chart.dataChanged(reveal);
+}
+
+// ------------------------------------------------------------------ range slider (log scale)
+const R_MIN = 1800;
+function rMax() { return Math.max(7200, (S.firstTs ? nowSec() - S.firstTs : 0) * 1.02, 2592000); }
+function r2pos(r) { return Math.log(r / R_MIN) / Math.log(rMax() / R_MIN); }
+function pos2r(p) { return R_MIN * Math.pow(rMax() / R_MIN, clamp(p, 0, 1)); }
+function niceRange(r) { // snap to friendly values
+  const steps = [1800, 2700, 3600, 5400, 7200, 10800, 14400, 21600, 28800, 43200, 64800, 86400, 129600, 172800, 259200, 345600, 432000, 604800, 864000, 1209600, 1814400, 2592000, 3888000, 5184000, 7776000, 15552000, 31536000];
+  let best = steps[0]; for (const s of steps) if (Math.abs(Math.log(s / r)) < Math.abs(Math.log(best / r))) best = s; return best;
+}
+function updateSlider() {
+  const w = V.range > 0 ? V.range : windowSec();
+  const p = V.range > 0 ? r2pos(w) : 1;
+  // the slider is mirrored: right = short window (near "now"), left = long history
+  const x = (1 - p) * 100;
+  $('#sthumb').style.left = x + '%';
+  $('#sfill').style.left = x + '%';
+  $('#rangeLbl').textContent = T('window') + ': ' + (V.range > 0 ? fmtDur(V.range) : T('all_lc') + ' (' + fmtDur(w) + ')');
+  document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', +b.dataset.r === V.range));
+  const ticks = [[3600, '1h'], [21600, '6h'], [86400, '1d'], [604800, '7d'], [2592000, '30d']].filter(([r]) => r <= rMax());
+  $('#sticks').innerHTML = ticks.map(([r, l]) => { const x = (1 - r2pos(r)) * 100; return `<span style="left:${x}%"></span><em style="left:${x}%">${l}</em>`; }).join('');
+  $('#slider').setAttribute('aria-valuetext', $('#rangeLbl').textContent);
+}
+function setRange(r, opts = {}) {
+  V.range = r;
+  updateSlider(); persist();
+  chart.retarget(opts.instant);
+  clearTimeout(setRange.t);
+  setRange.t = setTimeout(async () => {
+    if (needSeries(V.range)) { await ensureSeries(true); chart.dataChanged(); }
+    renderBoard();
+  }, opts.debounce ?? 120);
+}
+(function sliderInput() {
+  const el = $('#slider');
+  let drag = false;
+  const at = e => { const b = el.getBoundingClientRect(); return 1 - (e.clientX - b.left) / b.width; };
+  el.addEventListener('pointerdown', e => { drag = true; el.setPointerCapture(e.pointerId); setRange(niceRange(pos2r(at(e))), { debounce: 250 }); });
+  el.addEventListener('pointermove', e => { if (drag) setRange(niceRange(pos2r(at(e))), { debounce: 250 }); });
+  el.addEventListener('pointerup', () => { drag = false; });
+  el.addEventListener('keydown', e => {
+    const cur = V.range > 0 ? V.range : windowSec();
+    if (e.key === 'ArrowLeft') setRange(niceRange(cur * 1.5));
+    if (e.key === 'ArrowRight') setRange(niceRange(cur / 1.5));
+  });
+})();
+
+// ------------------------------------------------------------------ chart
+const chart = (() => {
+  const cv = $('#chart'), box = $('#chartbox');
+  const ctx = cv.getContext('2d');
+  let W = 0, H = 0, dpr = 1;
+  let raf = 0;
+  // animated view: window length (seconds) and y-domain
+  const cur = { win: 86400, y0: 0, y1: 1 }, tgt = { win: 86400, y0: 0, y1: 1 };
+  let reveal = 1, revealStart = 0;
+  let hover = null; // {pid, idx}
+  let mouse = null;
+  let geom = { series: [], labels: [], plot: null };
+  let lastDraw = 0;
+
+  function resize() {
+    const r = box.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.max(200, r.width); H = Math.max(200, r.height);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    request();
+  }
+  new ResizeObserver(resize).observe(box);
+
+  function layout() {
+    const narrow = W < 720;
+    const labelW = narrow ? 92 : 250;
+    return { l: narrow ? 52 : 78, r: W - labelW - (narrow ? 8 : 24), t: 26, b: H - 46, narrow, labelW };
+  }
+
+  // per-series value points inside the current window (clipped at the left edge)
+  function seriesPoints(p, from, now) {
+    const arr = S.series.get(p.id) || [];
+    const pts = [];
+    let carry = null;
+    for (const s of arr) {
+      const v = valueOf(s);
+      if (v == null) continue;
+      if (s.t < from) { carry = { t: from, v, s, clipped: true }; continue; }
+      if (s.t > now + 60) continue;
+      if (carry) { pts.push(carry); carry = null; }
+      pts.push({ t: s.t, v, s });
+    }
+    if (carry) pts.push(carry, { t: now, v: carry.v, s: carry.s, clipped: true });
+    if (V.gain && pts.length) { const base = pts[0].v; for (const q of pts) q.d = q.v - base; }
+    return pts;
+  }
+  const valOfPt = q => V.gain ? q.d : q.v;
+
+  function computeTargets() {
+    const now = nowSec();
+    tgt.win = windowSec();
+    const from = now - tgt.win;
+    let lo = Infinity, hi = -Infinity;
+    for (const p of visiblePlayers()) {
+      for (const q of seriesPoints(p, from, now)) { const v = valOfPt(q); if (v < lo) lo = v; if (v > hi) hi = v; }
+    }
+    if (!isFinite(lo)) { lo = 0; hi = 1; }
+    if (V.zero || V.gain) lo = Math.min(lo, 0);
+    if (hi === lo) { hi += Math.max(1, Math.abs(hi) * 0.02); lo -= V.zero ? 0 : Math.max(1, Math.abs(lo) * 0.02); }
+    const pad = (hi - lo) * 0.08;
+    tgt.y1 = hi + pad; tgt.y0 = (V.zero && lo >= 0) ? 0 : lo - pad;
+  }
+
+  function niceStep(span, n) {
+    const raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
+    return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag;
+  }
+  const TSTEPS = [60, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400, 172800, 259200, 604800, 1209600, 2592000, 7776000];
+
+  // d3-style monotone cubic (no overshoot: flat stays flat)
+  function monoPath(c, pts) {
+    const n = pts.length;
+    if (n < 2) return;
+    const t = new Array(n);
+    const sl = i => (pts[i + 1].y - pts[i].y) / ((pts[i + 1].x - pts[i].x) || 1e-6);
+    for (let i = 1; i < n - 1; i++) {
+      const s0 = sl(i - 1), s1 = sl(i);
+      const h0 = pts[i].x - pts[i - 1].x, h1 = pts[i + 1].x - pts[i].x;
+      const p = (s0 * h1 + s1 * h0) / ((h0 + h1) || 1e-6);
+      t[i] = (Math.sign(s0) + Math.sign(s1)) * Math.min(Math.abs(s0), Math.abs(s1), 0.5 * Math.abs(p)) || 0;
+    }
+    t[0] = n > 2 ? ((3 * sl(0) - t[1]) / 2) : sl(0);
+    t[n - 1] = n > 2 ? ((3 * sl(n - 2) - t[n - 2]) / 2) : sl(0);
+    if (Math.sign(t[0]) !== Math.sign(sl(0))) t[0] = 0;
+    if (Math.sign(t[n - 1]) !== Math.sign(sl(n - 2))) t[n - 1] = 0;
+    c.moveTo(pts[0].x, pts[0].y);
+    for (let i = 0; i < n - 1; i++) {
+      const dx = (pts[i + 1].x - pts[i].x) / 3;
+      c.bezierCurveTo(pts[i].x + dx, pts[i].y + dx * t[i], pts[i + 1].x - dx, pts[i + 1].y - dx * t[i + 1], pts[i + 1].x, pts[i + 1].y);
+    }
+  }
+  function tracePath(c, pts) {
+    if (!pts.length) return;
+    if (V.curve === 'smooth') return monoPath(c, pts);
+    c.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      if (V.curve === 'step') c.lineTo(pts[i].x, pts[i - 1].y);
+      c.lineTo(pts[i].x, pts[i].y);
+    }
+  }
+  function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+
+  function draw(ts) {
+    raf = 0;
+    // time-based easing towards targets (stays smooth even when frames are throttled)
+    const dt = lastDraw ? Math.min(250, ts - lastDraw) : 16;
+    const k = 1 - Math.exp(-dt / 110);
+    let moving = false;
+    const ySpan = Math.abs(tgt.y1 - tgt.y0) || 1;
+    for (const key of ['win', 'y0', 'y1']) {
+      const d = tgt[key] - cur[key];
+      const eps = key === 'win' ? tgt.win * 0.002 : ySpan * 0.002;
+      if (Math.abs(d) > eps) { cur[key] += d * k; moving = true; } else cur[key] = tgt[key];
+    }
+    if (reveal < 1) { reveal = Math.min(1, (ts - revealStart) / 700); moving = true; }
+
+    const L = layout();
+    const now = nowSec(), from = now - cur.win;
+    const X = t => L.l + (t - from) / cur.win * (L.r - L.l);
+    const Y = v => L.b - (v - cur.y0) / ((cur.y1 - cur.y0) || 1) * (L.b - L.t);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // grid + y axis
+    ctx.font = '11px ' + MONO;
+    const ystep = Math.max(1, niceStep(cur.y1 - cur.y0, Math.max(3, Math.round((L.b - L.t) / 70)))); // all stats are integers
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const m = modeOf(V.mode);
+    for (let v = Math.ceil(cur.y0 / ystep) * ystep; v <= cur.y1 + 1e-9; v += ystep) {
+      const y = Math.round(Y(v)) + 0.5;
+      if (y < L.t - 2 || y > L.b + 2) continue;
+      ctx.strokeStyle = Math.abs(v) < ystep / 1e6 && V.gain ? 'rgba(167,179,198,.35)' : 'rgba(148,163,184,.08)';
+      ctx.setLineDash(v === 0 && V.gain ? [] : [3, 5]);
+      ctx.beginPath(); ctx.moveTo(L.l, y); ctx.lineTo(L.r, y); ctx.stroke();
+      ctx.fillStyle = '#6c7a90';
+      const lab = m.key === 'weapon' ? (V.gain ? signed(v, x => x) : '+' + Math.round(v)) : (V.gain ? signed(v, fmtK) : (L.narrow ? fmtK(v) : fmtInt(v)));
+      ctx.fillText(lab, L.l - 10, y);
+    }
+    ctx.setLineDash([]);
+    // x axis: relative to now
+    const want = Math.max(2, Math.floor((L.r - L.l) / 120));
+    let tstep = TSTEPS.find(s => cur.win / s <= want) || TSTEPS[TSTEPS.length - 1];
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let k2 = 0; k2 * tstep <= cur.win + 1; k2++) {
+      const t = now - k2 * tstep, x = Math.round(X(t)) + 0.5;
+      if (x < L.l - 1) break;
+      ctx.strokeStyle = k2 === 0 ? 'rgba(245,166,35,.35)' : 'rgba(148,163,184,.06)';
+      ctx.setLineDash(k2 === 0 ? [2, 4] : [3, 5]);
+      ctx.beginPath(); ctx.moveTo(x, L.t); ctx.lineTo(x, L.b); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#2a3647'; ctx.beginPath(); ctx.moveTo(x, L.b); ctx.lineTo(x, L.b + 5); ctx.stroke();
+      ctx.fillStyle = k2 === 0 ? '#f5a623' : '#a7b3c6';
+      ctx.font = (k2 === 0 ? '600 ' : '') + '11px ' + MONO;
+      ctx.fillText(k2 === 0 ? (L.narrow ? '0' : '0 · ' + T('now')) : '−' + fmtDur(k2 * tstep), x, L.b + 9);
+      if (!L.narrow) { ctx.fillStyle = '#4c596c'; ctx.font = '10px ' + MONO; ctx.fillText(fmtClock(t, tstep >= 43200), x, L.b + 24); }
+    }
+    ctx.strokeStyle = '#2a3647'; ctx.beginPath(); ctx.moveTo(L.l, L.b + .5); ctx.lineTo(L.r, L.b + .5); ctx.moveTo(L.l - .5, L.t); ctx.lineTo(L.l - .5, L.b); ctx.stroke();
+
+    // series geometry
+    const vis = visiblePlayers();
+    const series = [];
+    for (const p of vis) {
+      const pts = seriesPoints(p, from, now).map(q => ({ ...q, x: X(q.t), y: Y(valOfPt(q)) }));
+      if (!pts.length) continue;
+      series.push({ p, pts, color: playerColor(p), last: pts[pts.length - 1] });
+    }
+    const focus = hover ? hover.pid : V.focus;
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(L.l, L.t - 8, (L.r - L.l + 6) * reveal, L.b - L.t + 16); ctx.clip();
+    // area under the focused line
+    for (const sr of series) {
+      if (sr.p.id !== focus || sr.pts.length < 2) continue;
+      const g = ctx.createLinearGradient(0, L.t, 0, L.b);
+      g.addColorStop(0, rgba(sr.color, 0.22)); g.addColorStop(1, rgba(sr.color, 0));
+      ctx.beginPath(); tracePath(ctx, sr.pts);
+      ctx.lineTo(sr.last.x, L.b); ctx.lineTo(sr.pts[0].x, L.b); ctx.closePath();
+      ctx.fillStyle = g; ctx.fill();
+    }
+    // lines: dimmed ones first, focused on top
+    const order = series.slice().sort((a, b) => (a.p.id === focus) - (b.p.id === focus));
+    for (const sr of order) {
+      const dim = focus != null && sr.p.id !== focus;
+      ctx.globalAlpha = dim ? 0.22 : 1;
+      // dashed hold-line from the last sample to "now" (value still current)
+      if (sr.last.x < L.r - 2) {
+        ctx.setLineDash([2, 4]); ctx.strokeStyle = rgba(sr.color, .5); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(sr.last.x, sr.last.y); ctx.lineTo(L.r, sr.last.y); ctx.stroke(); ctx.setLineDash([]);
+      }
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      if (!dim) { ctx.shadowColor = rgba(sr.color, .55); ctx.shadowBlur = sr.p.id === focus ? 14 : 6; }
+      ctx.strokeStyle = sr.color; ctx.lineWidth = sr.p.id === focus ? 3 : 2;
+      ctx.beginPath(); tracePath(ctx, sr.pts); ctx.stroke();
+      ctx.shadowBlur = 0;
+      // sample dots: every sample when zoomed in, otherwise only where the value changed
+      const real = sr.pts.filter(q => !q.clipped);
+      const spacing = real.length > 1 ? (real[real.length - 1].x - real[0].x) / real.length : 99;
+      const all = spacing >= 9;
+      let lastDotX = -99;
+      for (let i = 0; i < real.length; i++) {
+        const q = real[i];
+        const changed = i === 0 || i === real.length - 1 || valOfPt(q) !== valOfPt(real[i - 1]);
+        if (!all && (!changed || q.x - lastDotX < 4)) continue;
+        lastDotX = q.x;
+        ctx.beginPath(); ctx.arc(q.x, q.y, all ? 3 : 2.6, 0, Math.PI * 2);
+        ctx.fillStyle = sr.color; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#0b0f17'; ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+
+    // live end-markers (pulse) at "now" for players read recently: samples are only stored on
+    // change, so the value holds from the last sample up to the latest successful read
+    const pulse = (Math.sin(ts / 380) + 1) / 2;
+    for (const sr of series) {
+      if (focus != null && sr.p.id !== focus) continue;
+      if (!isFresh(sr.p, now)) continue;
+      const x = L.r, y = sr.last.y;
+      ctx.beginPath(); ctx.arc(x, y, 4 + pulse * 5, 0, Math.PI * 2); ctx.fillStyle = rgba(sr.color, .25 * (1 - pulse)); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fillStyle = sr.color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#0b0f17'; ctx.stroke();
+    }
+
+    // right-hand labels with collision avoidance
+    const labels = series.map(sr => ({ sr, want: sr.last.y, y: sr.last.y })).sort((a, b) => a.want - b.want);
+    const n = labels.length;
+    const avail = L.b - L.t + 30;
+    const gap = Math.min(L.narrow ? 34 : 46, Math.max(16, avail / Math.max(1, n)));
+    { // pack: keep order, enforce min gap, stay inside [top, bot]
+      const top = L.t - 6, bot = L.b + 6;
+      for (let i = 0; i < n; i++) labels[i].y = Math.max(clamp(labels[i].want, top, bot), i ? labels[i - 1].y + gap : top);
+      if (n && labels[n - 1].y > bot) {
+        labels[n - 1].y = bot;
+        for (let i = n - 2; i >= 0; i--) labels[i].y = Math.min(labels[i].y, labels[i + 1].y - gap);
+        if (labels[0].y < top) { const sh = top - labels[0].y; for (const l of labels) l.y += sh; }
+      }
+    }
+    const ranked = series.slice().sort((a, b) => valOfPt(b.last) - valOfPt(a.last));
+    const rankOf = new Map(ranked.map((sr, i) => [sr.p.id, i + 1]));
+    const av = clamp(gap - 8, 16, 38);
+    const ax = L.r + (L.narrow ? 14 : 34) + av / 2;
+    const labelBoxes = [];
+    for (const lb of labels) {
+      const { sr } = lb;
+      const dim = focus != null && sr.p.id !== focus;
+      ctx.globalAlpha = dim ? 0.35 : 1;
+      // leader
+      ctx.setLineDash([2, 3]); ctx.strokeStyle = rgba(sr.color, .6); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(L.r + 2, sr.last.y); ctx.bezierCurveTo(L.r + 14, sr.last.y, ax - av / 2 - 14, lb.y, ax - av / 2 - 2, lb.y); ctx.stroke(); ctx.setLineDash([]);
+      // avatar
+      ctx.save();
+      ctx.beginPath(); ctx.arc(ax, lb.y, av / 2, 0, Math.PI * 2); ctx.closePath();
+      ctx.fillStyle = '#1b2431'; ctx.fill(); ctx.clip();
+      const im = avatarImg(sr.p);
+      if (im) {
+        const s = Math.min(im.naturalWidth, im.naturalHeight);
+        ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, ax - av / 2, lb.y - av / 2, av, av);
+      } else {
+        ctx.fillStyle = rgba(sr.color, .35); ctx.fillRect(ax - av / 2, lb.y - av / 2, av, av);
+        ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(av * .38)}px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(initials(sr.p.name), ax, lb.y + 1);
+      }
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(ax, lb.y, av / 2 + 1.5, 0, Math.PI * 2); ctx.lineWidth = 2.5; ctx.strokeStyle = sr.p._ring;
+      if (!dim) { ctx.shadowColor = rgba(sr.p._ring, .6); ctx.shadowBlur = 10; }
+      ctx.stroke(); ctx.shadowBlur = 0;
+      // pill: name + value (text in text ink; color carried by border/ring)
+      const valTxt = m.key === 'weapon' && !V.gain ? weaponTxt(sr.last.s) : (V.gain ? signed(valOfPt(sr.last), m.key === 'weapon' ? (x => x) : fmtK) : m.fmt(valOfPt(sr.last)));
+      const px = ax + av / 2 + 8;
+      const ph = Math.min(26, Math.max(16, gap - 14));
+      let box = { x: ax - av / 2, y: lb.y - av / 2, w: av, h: av };
+      if (!L.narrow) {
+        ctx.font = `700 ${ph > 20 ? 13 : 11}px ${SANS}`;
+        let name = sr.p.name;
+        const vw = (ctx.font = `600 ${ph > 20 ? 12 : 10}px ${MONO}`, ctx.measureText(valTxt).width);
+        ctx.font = `700 ${ph > 20 ? 13 : 11}px ${SANS}`;
+        const maxName = W - px - vw - 34;
+        while (ctx.measureText(name).width > maxName && name.length > 3) name = name.slice(0, -2);
+        if (name !== sr.p.name) name += '…';
+        const nw = ctx.measureText(name).width;
+        const pw = nw + vw + 30;
+        roundRect(ctx, px, lb.y - ph / 2, pw, ph, ph / 2.6);
+        ctx.fillStyle = 'rgba(13,18,26,.92)'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = rgba(sr.color, .9); ctx.stroke();
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+        ctx.fillText(name, px + 10, lb.y + 1);
+        ctx.font = `600 ${ph > 20 ? 12 : 10}px ${MONO}`;
+        ctx.fillStyle = '#c9d3e1'; ctx.fillText(valTxt, px + 20 + nw, lb.y + 1);
+        // rank badge
+        const rk = rankOf.get(sr.p.id);
+        if (ph > 20 && rk) {
+          ctx.font = `700 9px ${MONO}`;
+          ctx.fillStyle = rk === 1 ? '#f5a623' : '#6c7a90'; ctx.textAlign = 'right';
+          ctx.fillText('#' + rk, ax - av / 2 - 4, lb.y - av / 2 + 4);
+        }
+        box = { x: ax - av / 2, y: lb.y - av / 2, w: px + pw - (ax - av / 2), h: av };
+      } else {
+        ctx.font = `600 10px ${MONO}`; ctx.fillStyle = '#c9d3e1'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(valTxt, px - 2, lb.y);
+        box = { x: ax - av / 2, y: lb.y - av / 2, w: av + 50, h: av };
+      }
+      labelBoxes.push({ pid: sr.p.id, ...box });
+      ctx.globalAlpha = 1;
+    }
+
+    // hover: crosshair + ring on the hovered sample
+    if (mouse && mouse.x >= L.l && mouse.x <= L.r && mouse.y >= L.t && mouse.y <= L.b) {
+      ctx.strokeStyle = 'rgba(167,179,198,.25)'; ctx.setLineDash([]); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(Math.round(mouse.x) + .5, L.t); ctx.lineTo(Math.round(mouse.x) + .5, L.b); ctx.stroke();
+      const t = from + (mouse.x - L.l) / (L.r - L.l) * cur.win;
+      const txt = '−' + fmtDur(now - t) + ' · ' + fmtClock(t, cur.win > 86400);
+      ctx.font = '600 11px ' + MONO;
+      const tw = ctx.measureText(txt).width + 14;
+      const bx = clamp(mouse.x - tw / 2, L.l, L.r - tw);
+      roundRect(ctx, bx, L.b + 4, tw, 20, 6); ctx.fillStyle = '#233046'; ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + tw / 2, L.b + 14.5);
+    }
+    if (hover && hover.pt) {
+      const sr = series.find(s => s.p.id === hover.pid);
+      const q = sr && sr.pts.find(q => q.s === hover.pt.s && !q.clipped) || (sr && hover.pt);
+      if (q) {
+        ctx.beginPath(); ctx.arc(q.x, q.y, 7, 0, Math.PI * 2); ctx.fillStyle = rgba(sr.color, .25); ctx.fill();
+        ctx.beginPath(); ctx.arc(q.x, q.y, 4.5, 0, Math.PI * 2); ctx.fillStyle = sr.color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+      }
+    }
+
+    geom = { series, labels: labelBoxes, plot: L, from, now };
+    lastDraw = ts;
+    if (moving || hasFresh(series, now)) request(moving ? 0 : 50);
+  }
+  function hasFresh(series, now) { return series.some(sr => isFresh(sr.p, now)); }
+  let timer = 0;
+  function request(delay) {
+    if (delay) { if (!timer) timer = setTimeout(() => { timer = 0; request(); }, delay); return; }
+    if (!raf) raf = requestAnimationFrame(draw);
+  }
+
+  // hit testing
+  function pick(mx, my) {
+    for (const b of geom.labels) if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+      const sr = geom.series.find(s => s.p.id === b.pid);
+      const real = sr.pts.filter(q => !q.clipped);
+      return { pid: b.pid, pt: real[real.length - 1] || sr.last, label: true };
+    }
+    const L = geom.plot; if (!L) return null;
+    if (mx < L.l - 8 || mx > L.r + 8 || my < L.t - 10 || my > L.b + 10) return null;
+    let best = null, bd = 18 * 18;
+    for (const sr of geom.series) {
+      if (V.focus != null && sr.p.id !== V.focus) continue;
+      for (const q of sr.pts) {
+        if (q.clipped) continue;
+        const d = (q.x - mx) ** 2 + (q.y - my) ** 2;
+        if (d < bd) { bd = d; best = { pid: sr.p.id, pt: q }; }
+      }
+    }
+    if (best) return best;
+    // otherwise: the line under the cursor (value in effect at that time)
+    let bl = null, bdy = 10;
+    for (const sr of geom.series) {
+      if (V.focus != null && sr.p.id !== V.focus) continue;
+      let q = null;
+      for (const c of sr.pts) { if (c.x <= mx) q = c; else break; }
+      if (!q) continue;
+      const dy = Math.abs(q.y - my);
+      if (dy < bdy) { bdy = dy; bl = { pid: sr.p.id, pt: sr.pts.filter(c => !c.clipped && c.x <= mx).pop() || q }; }
+    }
+    return bl;
+  }
+  cv.addEventListener('pointermove', e => {
+    const r = cv.getBoundingClientRect();
+    mouse = { x: e.clientX - r.left, y: e.clientY - r.top };
+    const h = pick(mouse.x, mouse.y);
+    const changed = (h && h.pt && h.pt.s) !== (hover && hover.pt && hover.pt.s) || (h && h.pid) !== (hover && hover.pid);
+    hover = h;
+    cv.style.cursor = h && h.label ? 'pointer' : 'crosshair';
+    if (changed) tooltip.show(h, e.clientX, e.clientY); else tooltip.move(e.clientX, e.clientY);
+    request();
+  });
+  cv.addEventListener('pointerleave', () => { mouse = null; hover = null; tooltip.hide(); request(); });
+  cv.addEventListener('click', () => {
+    if (hover) { V.focus = V.focus === hover.pid ? null : hover.pid; renderBoard(); request(); }
+    else if (V.focus != null) { V.focus = null; renderBoard(); request(); }
+  });
+  cv.addEventListener('wheel', e => {
+    // plain wheel scrolls the page; Ctrl/Shift + wheel (or trackpad pinch) zooms the time window
+    if (!e.ctrlKey && !e.shiftKey && !OBS) return;
+    e.preventDefault();
+    const curR = V.range > 0 ? V.range : windowSec();
+    const f = Math.exp(clamp(e.deltaY, -200, 200) * 0.002);
+    const r = clamp(curR * f, R_MIN, rMax());
+    setRange(Math.round(r), { debounce: 300 });
+  }, { passive: false });
+
+  return {
+    request,
+    retarget() { computeTargets(); request(); },
+    dataChanged(rev) {
+      computeTargets();
+      if (rev) { reveal = 0; revealStart = performance.now(); Object.assign(cur, tgt); }
+      request();
+      if (hover) tooltip.show(hover, tooltip.lx, tooltip.ly);
+    },
+    tick() { computeTargets(); request(); },
+    focusPlayer(id) { V.focus = id; request(); },
+    get hover() { return hover; },
+  };
+})();
+
+// ------------------------------------------------------------------ tooltip
+const tooltip = (() => {
+  const el = $('#tip');
+  const api = { lx: 0, ly: 0 };
+  function prevSample(pid, s) {
+    const arr = S.series.get(pid) || []; const i = arr.indexOf(s);
+    for (let j = i - 1; j >= 0; j--) if (arr[j].t < s.t) return arr[j];
+    return null;
+  }
+  function delta(cur, prev, f) {
+    if (prev == null || cur == null) return '';
+    const d = cur - prev; if (!d) return '';
+    return ` <span class="${d > 0 ? 'd-up' : 'd-dn'}">${signed(d, f)}</span>`;
+  }
+  api.show = (h, x, y) => {
+    api.lx = x; api.ly = y;
+    if (!h || !h.pt || !h.pt.s) return api.hide();
+    const p = S.byId.get(h.pid); if (!p) return api.hide();
+    const s = h.pt.s, pv = prevSample(p.id, s);
+    const team = S.teamById.get(p.team);
+    const m = V.mode;
+    const now = nowSec();
+    const row = (key, k, v) => `<div class="${m === key ? 'row-hl' : 'row'}" style="display:contents"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+    const maxDv = Math.max(1, ...s.dv.map(b => b.t));
+    const dvRows = s.dv.map(b => `<span class="${V.sub === b.n && m === 'dv' ? 'nm' : 'muted'}">${esc(b.n)}</span><span class="bar"><i style="width:${(b.o / Math.max(1, b.t) * 100).toFixed(1)}%;--c:${p._color}"></i></span><span class="v">${b.o}/${b.t}</span>`).join('');
+    const godRows = s.g.map(g => `<span class="${V.sub === g.n && m === 'god' ? 'nm' : 'muted'}">${esc(g.n.replace(/\s*\[.*\]/, ''))} <span style="opacity:.6">${esc((g.n.match(/\[(.*)\]/) || [])[1] || '')}</span></span><span class="v">${g.v}</span>`).join('');
+    const stig = (s.sj || []).filter(x => x.l > 0).sort((a, b) => b.e - a.e || b.l - a.l);
+    el.innerHTML = `
+      <div class="hd"><div class="av" style="--c:${p._ring};background-image:${p.avatar ? `url('${esc(p.avatar)}')` : 'none'}"></div>
+        <div><div class="nm">${esc(p.name)}</div><div class="sub">${esc(p.char)} · ${esc(p.server || '')} · ${esc(s.cls || p.cls)} · Lv ${s.lv}</div>
+        ${team ? `<div class="team-tag" style="--c:${esc(team.color)}"><i></i>${esc(team.name)}</div>` : ''}</div></div>
+      <div class="when"><span>${fmtClock(s.t, true)}</span><span>${T('ago', fmtDur(now - s.t))}</span></div>
+      <div class="grid">
+        ${row('cp', 'Combat Power', fmtInt(s.cp) + delta(s.cp, pv && pv.cp, fmtInt))}
+        ${row('ilvl', 'Item Level', fmtInt(s.il) + delta(s.il, pv && pv.il, fmtInt))}
+        ${row('level', T('tt_level'), s.lv + delta(s.lv, pv && pv.lv, fmtInt))}
+        ${row('stigma', T('tt_stigma'), s.st + delta(s.st, pv && pv.st, fmtInt))}
+      </div>
+      <div class="sec ${m === 'weapon' ? 'hl-sec' : ''}"><h4><span>${T('weapon')}</span><b>+${s.we}${s.wm ? '/' + s.wm : ''} <span class="dia">${diamonds(s.wx)}</span>${delta(s.we + s.wx, pv && pv.we + pv.wx, x => x)}</b></h4>
+        <div class="grid"><span class="k">${esc(s.wn || '—')}</span><span class="v">${esc(s.wg || '')}</span>${s.wa ? `<span class="k">${T('attack')}</span><span class="v">${esc(s.wa)}</span>` : ''}</div></div>
+      <div class="sec ${m === 'dv' ? 'hl-sec' : ''}"><h4><span>Daevanion</span><b>${s.dvt}${delta(s.dvt, pv && pv.dvt, fmtInt)}</b></h4><div class="bars">${dvRows || '<span class="muted">—</span>'}</div></div>
+      <div class="sec ${m === 'god' ? 'hl-sec' : ''}"><h4><span>${T('gods')}</span><b>${s.gt}${delta(s.gt, pv && pv.gt, fmtInt)}</b></h4><div class="gods">${godRows || '<span class="muted">—</span>'}</div></div>
+      ${stig.length ? `<div class="sec ${m === 'stigma' ? 'hl-sec' : ''}"><h4><span>${T('stigmas')}</span><b>${s.st}</b></h4><div class="gods">${stig.map(x => `<span class="${x.e ? '' : 'muted'}">${esc(x.n)}</span><span class="v">${x.l}</span>`).join('')}</div></div>` : ''}
+    `;
+    el.classList.add('show');
+    api.move(x, y);
+  };
+  api.move = (x, y) => {
+    api.lx = x; api.ly = y;
+    if (!el.classList.contains('show')) return;
+    const r = el.getBoundingClientRect(), vw = innerWidth, vh = innerHeight;
+    let left = x + 18, top = y + 18;
+    if (left + r.width > vw - 8) left = x - r.width - 18;
+    if (left < 8) left = 8;
+    if (top + r.height > vh - 8) top = Math.max(8, vh - r.height - 8);
+    el.style.left = left + 'px'; el.style.top = top + 'px';
+  };
+  api.hide = () => el.classList.remove('show');
+  return api;
+})();
+
+// ------------------------------------------------------------------ leaderboard
+function renderBoard() {
+  if (OBS) return;
+  const tb = $('#lb tbody');
+  const m = modeOf(V.mode);
+  const now = nowSec(), from = now - windowSec();
+  const rows = S.players.map(p => {
+    const arr = (S.series.get(p.id) || []).filter(s => valueOf(s) != null);
+    const last = arr[arr.length - 1];
+    let base = null;
+    for (const s of arr) { if (s.t <= from) base = s; else { if (!base) base = s; break; } }
+    const v = last ? valueOf(last) : null;
+    return { p, last, v, d: last && base ? v - valueOf(base) : null };
+  }).sort((a, b) => (b.v ?? -Infinity) - (a.v ?? -Infinity));
+  tb.innerHTML = rows.map((r, i) => {
+    const p = r.p, team = S.teamById.get(p.team);
+    const hidden = V.hiddenPlayers.has(p.id) || V.hiddenTeams.has(p.team || 0);
+    const fresh = isFresh(p, now);
+    const valTxt = r.last ? (m.key === 'weapon' ? weaponTxt(r.last) : m.full(r.v)) : '—';
+    const dTxt = r.d == null ? '' : r.d === 0 ? '<span class="flat">±0</span>' : `<span class="${r.d > 0 ? 'up' : 'dn'}">${r.d > 0 ? '▲' : '▼'} ${signed(r.d, m.key === 'weapon' ? (x => x) : fmtInt)}</span>`;
+    return `<tr data-id="${p.id}" class="${hidden ? 'hidden' : ''}">
+      <td class="rank">${r.last ? i + 1 : '–'}</td>
+      <td><div class="who"><div class="av" style="--c:${p._ring};background-image:${p.avatar ? `url('${esc(p.avatar)}')` : 'none'}"></div><div><div class="nm"><span class="dot" style="background:${p._color}"></span>${esc(p.name)}${V.focus === p.id ? ' ◉' : ''}</div><div class="cn">${esc(p.char)} · ${esc(p.server || '')}${p.cls ? ' · ' + esc(p.cls) : ''}</div></div></div></td>
+      <td>${team ? `<span class="team-tag" style="--c:${esc(team.color)}"><i></i>${esc(team.name)}</span>` : '<span class="flat">—</span>'}</td>
+      <td class="num"><b>${valTxt}</b></td>
+      <td class="num">${dTxt}</td>
+      <td class="num">${r.last ? r.last.lv : '—'}</td>
+      <td><span class="${fresh ? 'up' : 'flat'}" title="${p.active ? T('active_t') : T('inactive_t')}">${p.active ? '●' : '○'}</span> ${p.last_ok ? T('ago', fmtDur(now - p.last_ok)) : T('no_data')}</td>
+      <td><button class="eye" data-eye="${p.id}" title="${T('eye_t')}">${V.hiddenPlayers.has(p.id) ? '◌' : '◉'}</button></td>
+    </tr>`;
+  }).join('');
+  tb.querySelectorAll('tr').forEach(tr => tr.onclick = e => {
+    const id = +tr.dataset.id;
+    if (e.target.closest('[data-eye]')) {
+      if (V.hiddenPlayers.has(id)) V.hiddenPlayers.delete(id); else V.hiddenPlayers.add(id);
+      onViewChange(false); return;
+    }
+    V.focus = V.focus === id ? null : id; renderBoard(); chart.request();
+    $('#chartbox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+}
+
+function updateEmpty() {
+  const el = $('#empty');
+  let html = '';
+  if (!S.players.length) html = '<div>' + T('empty_players') + '</div>';
+  else if (![...S.series.values()].some(a => a.length)) html = '<div>' + T('empty_wait', Math.round(S.interval / 60)) + '</div>';
+  el.innerHTML = html; el.classList.toggle('show', !!html);
+}
+
+// ------------------------------------------------------------------ live status / OBS link
+function updateLive() {
+  const now = nowSec();
+  const nx = S.nextCycle - now;
+  $('#nextTxt').textContent = (nx > 0 ? T('next_in', nx >= 3600 ? fmtDur(nx) : pad2(Math.floor(nx / 60)) + ':' + pad2(Math.floor(nx % 60))) : T('updating')) + (S.lastCycle ? T('last', fmtClock(S.lastCycle)) : '');
+}
+$('#obsBtn').onclick = async () => {
+  const u = new URL(location.origin + '/');
+  u.searchParams.set('obs', '1'); u.searchParams.set('mode', V.mode);
+  if (V.sub) u.searchParams.set('sub', V.sub);
+  u.searchParams.set('range', V.range);
+  if (V.gain) u.searchParams.set('gain', '1');
+  if (V.zero) u.searchParams.set('zero', '1');
+  u.searchParams.set('curve', V.curve);
+  if (V.hiddenTeams.size) u.searchParams.set('team', [...S.teams.map(t => t.id), 0].filter(id => !V.hiddenTeams.has(id)).join(','));
+  u.searchParams.set('bg', 'transparent');
+  u.searchParams.set('lang', LANG);
+  try { await navigator.clipboard.writeText(u.toString()); $('#obsBtn').textContent = T('copied'); } catch { prompt(T('obs_prompt'), u.toString()); }
+  setTimeout(() => $('#obsBtn').textContent = T('obs'), 1800);
+};
+
+// ------------------------------------------------------------------ language switch
+function setLang(l, remember) {
+  LANG = l;
+  nf = new Intl.NumberFormat(LANG === 'en' ? 'en-US' : 'pl-PL');
+  if (remember) { langExplicit = true; LS.set('lang', l); }
+  applyStaticI18n();
+  $('#foot').textContent = T('foot', Math.round(S.interval / 60));
+  buildModeBar(); buildTeamBar(); buildPresets(); updateSlider(); renderBoard(); updateEmpty(); updateLive();
+  chart.request();
+}
+document.querySelectorAll('#langSw button').forEach(b => b.onclick = () => setLang(b.dataset.l, true));
+applyStaticI18n();
+$('#foot').textContent = T('foot', 15);
+
+// ------------------------------------------------------------------ boot
+(async () => {
+  await refresh(true);
+  chart.dataChanged(true);
+  setInterval(updateLive, 1000); updateLive();
+  // the right edge is always "now": nudge the view every few seconds
+  setInterval(() => chart.tick(), 5000);
+  setInterval(() => { renderBoard(); }, 30000);
+  // poll for new data; right after a collection cycle poll a bit faster
+  let lastPoll = 0;
+  setInterval(() => {
+    const now = nowSec();
+    const due = now - lastPoll > 60 || (S.nextCycle && now > S.nextCycle + 15 && now - lastPoll > 15);
+    if (due && !document.hidden) { lastPoll = now; refresh(false); }
+  }, 5000);
+})();
+</script>
+</body>
+</html>

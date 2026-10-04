@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracker Admin</title>
+<link rel="icon" href="/favicon.ico" type="image/svg+xml">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0b0f17; --panel: #10161f; --panel-2: #151c27; --line: #1f2a38; --line-2: #2a3647;
+  --text: #e6ecf5; --text-2: #a7b3c6; --muted: #6c7a90; --accent: #f5a623;
+  --good: #3ddc84; --bad: #e66767; --warn: #fab219;
+  --mono: ui-monospace, "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  --sans: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+a { color: var(--accent); }
+button, input, select { font: inherit; color: inherit; }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 18px 20px 60px; }
+header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+header h1 { margin: 0; font-size: 20px; }
+header .tag { font: 600 11px var(--mono); color: var(--accent); border: 1px solid #4a3412; background: #1d1509; border-radius: 6px; padding: 2px 8px; }
+.spacer { flex: 1; }
+.btn { background: var(--panel-2); border: 1px solid var(--line-2); color: var(--text); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; text-decoration: none; display: inline-block; }
+.btn:hover { border-color: #3a4d68; background: #1a2331; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #1a1205; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: #ffb3b3; border-color: #4a2020; background: #1d1010; }
+.btn.small { padding: 4px 9px; font-size: 12px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.seg { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 3px; gap: 2px; }
+.seg button { background: transparent; border: 0; padding: 4px 10px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-weight: 700; font-size: 12px; }
+.seg button:hover { color: var(--text); }
+.seg button.on { background: #233046; color: #fff; box-shadow: inset 0 0 0 1px #34465f; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 18px; }
+.card h2 { margin: 0 0 12px; font-size: 15px; display: flex; align-items: center; gap: 10px; }
+.card h2 .spacer { flex: 1; }
+.muted { color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.stat { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.stat.wide { grid-column: 1 / -1; }
+.stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.stat .v { font: 600 16px var(--mono); margin-top: 2px; word-break: break-all; }
+.stat .v.small { font-size: 12px; font-weight: 400; color: var(--text-2); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 8px 10px; border-bottom: 1px solid #161e2a; vertical-align: middle; }
+tr:hover td { background: #121a25; }
+.num { text-align: right; font-family: var(--mono); }
+.av { width: 38px; height: 38px; border-radius: 50%; background: #1b2431 center/cover; border: 2px solid var(--c, #444); flex: none; display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #fff; }
+.who { display: flex; gap: 10px; align-items: center; }
+.who b { display: block; }
+.who small { color: var(--muted); }
+.err { color: var(--bad); font-size: 12px; max-width: 260px; white-space: normal; }
+.ok { color: var(--good); }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.tablewrap { overflow-x: auto; }
+
+/* switches */
+.switch { position: relative; display: inline-block; width: 38px; height: 22px; flex: none; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch span { position: absolute; inset: 0; background: #283244; border-radius: 22px; cursor: pointer; transition: .15s; }
+.switch span::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #9aa6b8; border-radius: 50%; transition: .15s; }
+.switch input:checked + span { background: #2f6d3e; }
+.switch input:checked + span::before { transform: translateX(16px); background: #fff; }
+.switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.swl { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
+
+/* forms */
+.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; }
+label.f { display: grid; gap: 5px; font-size: 12px; color: var(--text-2); font-weight: 600; }
+input[type=text], input[type=password], input[type=number], select { background: #0c121a; border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; color: var(--text); width: 100%; }
+input:focus, select:focus { outline: 2px solid #f5a62366; border-color: var(--accent); }
+input[type=color] { width: 44px; height: 34px; border: 1px solid var(--line-2); border-radius: 8px; background: #0c121a; padding: 2px; cursor: pointer; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* modal */
+.modal { position: fixed; inset: 0; background: #000a; display: none; place-items: center; z-index: 30; padding: 16px; }
+.modal.show { display: grid; }
+.modal .box { background: var(--panel); border: 1px solid var(--line-2); border-radius: 16px; width: min(780px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 20px 22px; box-shadow: 0 20px 60px #000c; }
+.modal h3 { margin: 0 0 14px; font-size: 17px; }
+.searchrow { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px 16px; align-items: end; }
+@media (max-width: 640px) { .searchrow { grid-template-columns: 1fr; } }
+.avatar-edit { display: flex; gap: 16px; align-items: center; }
+.avatar-edit .big { width: 96px; height: 96px; border-radius: 50%; background: #1b2431 center/cover; border: 3px solid var(--c, #444); display: grid; place-items: center; font-size: 28px; font-weight: 700; flex: none; }
+.drop { border: 1.5px dashed var(--line-2); border-radius: 10px; padding: 12px; color: var(--muted); font-size: 12px; text-align: center; cursor: pointer; flex: 1; }
+.drop.over { border-color: var(--accent); color: var(--text); }
+
+/* search results (shugo-style) */
+.hits { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden auto; max-height: 280px; }
+.hits:empty { display: none; }
+.hits .msg { padding: 12px 14px; }
+.hit { display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; border-top: 1px solid var(--line); }
+.hit:first-child { border-top: 0; }
+.hit:hover { background: #141c28; }
+.hit.sel { background: #1d1709; box-shadow: inset 3px 0 0 var(--accent); }
+.hit img { width: 36px; height: 36px; border-radius: 50%; background: #1b2431; object-fit: cover; flex: none; }
+.hit .hn { font-weight: 700; font-size: 15px; color: #fff; }
+.hit .hm { font-size: 13px; color: var(--text-2); display: flex; gap: 10px; flex-wrap: wrap; }
+.hit .lv { color: #f0c419; font-weight: 600; }
+.hit .race { margin-left: auto; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; flex: none; }
+.race.asmo { background: #2a1d3d; color: #b48cf2; }
+.race.elyos { background: #13303a; color: #6fd3e8; }
+
+.actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+.note { font-size: 12px; color: var(--muted); }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1d2838; border: 1px solid #3a4d68; padding: 10px 16px; border-radius: 10px; opacity: 0; transition: .2s; z-index: 60; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateX(-50%); }
+.toast.bad { border-color: #6a2a2a; background: #2a1414; }
+.login { max-width: 360px; margin: 14vh auto; }
+.teams { display: grid; gap: 8px; }
+.team { display: grid; grid-template-columns: 50px 1fr 90px auto auto; gap: 8px; align-items: center; }
+@media (max-width: 700px) { .team { grid-template-columns: 44px 1fr; } }
+</style>
+</head>
+<body>
+<div id="loginView" class="wrap" hidden>
+  <div class="card login">
+    <h2><span data-i18n="login_title">🔒 Panel admina</span><span class="spacer"></span><span class="seg langSw"><button data-l="pl">PL</button><button data-l="en">EN</button></span></h2>
+    <form id="loginForm" class="form" style="grid-template-columns:1fr">
+      <label class="f"><span data-i18n="password">Hasło</span> <input type="password" id="pw" autocomplete="current-password" autofocus></label>
+      <button class="btn primary" type="submit" data-i18n="login">Zaloguj</button>
+      <div class="note" id="loginErr"></div>
+    </form>
+  </div>
+</div>
+
+<div id="app" class="wrap" hidden>
+  <header>
+    <h1>AION 2 Tracker</h1><span class="tag">ADMIN · localhost</span>
+    <span class="spacer"></span>
+    <span class="seg langSw" aria-label="Language"><button data-l="pl">PL</button><button data-l="en">EN</button></span>
+    <a class="btn" href="/" target="_blank" data-i18n="open_chart">↗ Wykres</a>
+    <button class="btn" id="fetchAll" data-i18n="fetch_all">⟳ Zbierz teraz (wszyscy aktywni)</button>
+    <button class="btn" id="logout" hidden data-i18n="logout">Wyloguj</button>
+  </header>
+
+  <section class="card">
+    <h2 data-i18n="worker_status">Status workera</h2>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section class="card">
+    <h2><span data-i18n="players">Gracze</span> <span class="muted" id="pcount"></span><span class="spacer"></span><button class="btn primary" id="addPlayer" data-i18n="add_player">+ Dodaj gracza</button></h2>
+    <div class="note" style="margin:-4px 0 10px" data-i18n-html="players_note"></div>
+    <div class="tablewrap">
+      <table id="players">
+        <thead><tr><th data-i18n="th_player">Gracz</th><th data-i18n="th_char">Postać</th><th data-i18n="th_team">Team</th><th class="num">CP</th><th class="num">iLvl</th><th class="num" data-i18n="th_samples">Próbek</th><th data-i18n="th_last">Ostatni odczyt</th><th data-i18n="th_active">Aktywny</th><th data-i18n="th_visible">Na wykresie</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span data-i18n="teams">Teamy</span><span class="spacer"></span><button class="btn" id="addTeam" data-i18n="new_team">+ Nowy team</button></h2>
+    <div class="note" style="margin:-4px 0 10px" data-i18n="teams_note"></div>
+    <div class="teams" id="teams"></div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="chart_settings">Ustawienia wykresu</h2>
+    <form class="form" id="settingsForm">
+      <label class="f"><span data-i18n="page_title">Tytuł strony</span> <input type="text" id="sTitle" maxlength="80"></label>
+      <label class="f"><span data-i18n="default_mode">Domyślny tryb</span>
+        <select id="sMode">
+          <option value="cp">Combat Power</option><option value="ilvl">Item Level</option>
+          <option value="dv" data-i18n="opt_dv"></option><option value="god" data-i18n="opt_god"></option>
+          <option value="weapon" data-i18n="opt_weapon"></option><option value="stigma" data-i18n="opt_stigma"></option><option value="level" data-i18n="opt_level"></option>
+        </select></label>
+      <label class="f"><span data-i18n="default_range">Domyślne okno czasu</span>
+        <select id="sRange">
+          <option value="3600">1h</option><option value="21600">6h</option><option value="86400">24h</option><option value="259200" data-i18n="d3"></option>
+          <option value="604800" data-i18n="d7"></option><option value="2592000" data-i18n="d30"></option><option value="0" data-i18n="all"></option>
+        </select></label>
+      <label class="f"><span data-i18n="default_lang">Domyślny język strony</span>
+        <select id="sLang">
+          <option value="auto" data-i18n="lang_auto"></option><option value="pl">Polski</option><option value="en">English</option>
+        </select></label>
+      <div style="display:flex;align-items:end"><button class="btn primary" type="submit" data-i18n="save_settings">Zapisz ustawienia</button></div>
+    </form>
+    <div class="note" style="margin-top:8px" data-i18n="settings_note"></div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="db_title">Baza danych — eksport / import</h2>
+    <div class="row">
+      <a class="btn" href="/api/admin/export" download data-i18n="export">⤓ Eksportuj bazę (.db)</a>
+      <label class="btn"><span data-i18n="import">⤒ Importuj i scal bazę…</span><input type="file" id="importFile" accept=".db,.sqlite,.sqlite3,application/octet-stream" hidden></label>
+      <span class="note" id="importRes"></span>
+    </div>
+    <p class="note" data-i18n="import_note"></p>
+  </section>
+</div>
+
+<div class="modal" id="pmodal" role="dialog" aria-modal="true">
+  <div class="box">
+    <h3 id="pmTitle"></h3>
+    <div class="searchrow">
+      <label class="f"><span data-i18n="char_name">Nick w grze</span> <input type="text" id="pmChar" maxlength="40" data-i18n-ph="char_ph" autocomplete="off"></label>
+      <label class="f"><span data-i18n="server">Serwer</span> <select id="pmServer"></select></label>
+      <button class="btn" id="pmSearch" type="button" data-i18n="search">🔍 Szukaj</button>
+    </div>
+    <div class="note" style="margin-top:6px" data-i18n="search_hint"></div>
+    <div class="hits" id="pmHits"></div>
+    <div class="form" style="margin-top:14px">
+      <label class="f"><span data-i18n="display_name">Wyświetlany nick (streamer)</span> <input type="text" id="pmDisplay" maxlength="40" data-i18n-ph="display_ph"></label>
+      <label class="f"><span data-i18n="th_team">Team</span> <select id="pmTeam"></select></label>
+      <label class="f"><span data-i18n="line_color">Kolor linii</span>
+        <span class="row"><input type="color" id="pmColor" value="#3987e5"><label class="swl"><input type="checkbox" id="pmColorAuto" checked> <span data-i18n="color_auto">automatycznie (team / paleta)</span></label></span></label>
+      <label class="f"><span data-i18n="sort">Kolejność (sort)</span> <input type="number" id="pmSort" value="0"></label>
+      <div class="row" style="align-items:end;gap:18px">
+        <label class="swl"><span class="switch"><input type="checkbox" id="pmActive" checked><span></span></span> <span data-i18n="active_collect">Aktywny (zbieraj)</span></label>
+        <label class="swl"><span class="switch"><input type="checkbox" id="pmVisible" checked><span></span></span> <span data-i18n="th_visible">Na wykresie</span></label>
+      </div>
+    </div>
+    <div style="margin-top:16px" class="f"><span style="font-size:12px;color:var(--text-2);font-weight:600">Avatar</span></div>
+    <div class="avatar-edit" style="margin-top:6px">
+      <div class="big" id="pmAvatar"></div>
+      <div class="drop" id="pmDrop"><span data-i18n="drop">Upuść obrazek albo kliknij</span><br><span class="muted" data-i18n="drop_note"></span><input type="file" id="pmFile" accept="image/*" hidden><div class="note" id="pmAvNote" style="margin-top:6px;color:var(--text-2)"></div></div>
+      <button class="btn small" type="button" id="pmAvClear" data-i18n="use_game" data-i18n-title="use_game_title">Użyj z gry</button>
+    </div>
+    <div class="actions">
+      <button class="btn danger" id="pmDelete" type="button" hidden data-i18n="delete_player">Usuń gracza</button>
+      <span class="spacer"></span>
+      <button class="btn" id="pmCancel" type="button" data-i18n="cancel">Anuluj</button>
+      <button class="btn primary" id="pmSave" type="button" data-i18n="save">Zapisz</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ---------------------------------------------------------------- i18n (PL / EN)
+const I18N = {
+  pl: {
+    login_title: '🔒 Panel admina', password: 'Hasło', login: 'Zaloguj', login_required: 'wymagane logowanie',
+    open_chart: '↗ Wykres', fetch_all: '⟳ Zbierz teraz (wszyscy aktywni)', logout: 'Wyloguj',
+    worker_status: 'Status workera', st_interval: 'Interwał', st_next: 'Następny cykl', st_last: 'Ostatni cykl', st_samples: 'Próbek w bazie', st_size: 'Rozmiar bazy', st_file: 'Plik bazy',
+    in_x: 'za {0}', running: 'w toku…',
+    players: 'Gracze', add_player: '+ Dodaj gracza',
+    players_note: '<b>Aktywny</b> = worker zbiera dane co interwał. <b>Na wykresie</b> = widoczny na publicznej stronie. Można zbierać w tle bez pokazywania.',
+    th_player: 'Gracz', th_char: 'Postać', th_team: 'Team', th_samples: 'Próbek', th_last: 'Ostatni odczyt', th_active: 'Aktywny', th_visible: 'Na wykresie',
+    ago: '{0} temu', never: 'nigdy', unresolved: 'nierozwiązana', tog_active: 'Worker zbiera dane', tog_visible: 'Widoczny na wykresie', fetch_now: 'Pobierz dane teraz', edit: 'Edytuj',
+    no_players: 'Brak graczy — kliknij „+ Dodaj gracza”.', saved: 'Zapisano', queued: 'Pobieranie w kolejce…',
+    teams: 'Teamy', new_team: '+ Nowy team', teams_note: 'Kolor teamu = obwódka avatara i bazowy kolor linii graczy z tego teamu (gracz może mieć własny kolor).',
+    sort_title: 'kolejność', save: 'Zapisz', delete: 'Usuń', team_saved: 'Team zapisany', deleted: 'Usunięto', no_teams: 'Brak teamów.',
+    confirm_team_del: 'Usunąć team? Gracze zostaną bez teamu.', team_name_prompt: 'Nazwa teamu:', team_added: 'Dodano team',
+    chart_settings: 'Ustawienia wykresu', page_title: 'Tytuł strony', default_mode: 'Domyślny tryb', default_range: 'Domyślne okno czasu', default_lang: 'Domyślny język strony',
+    opt_dv: 'Daevanion (suma)', opt_god: 'Statystyki bogów (suma)', opt_weapon: 'Broń (+enchant ◆exceed)', opt_stigma: 'Stigmy Σ', opt_level: 'Poziom',
+    d3: '3 dni', d7: '7 dni', d30: '30 dni', all: 'Wszystko', lang_auto: 'Automatycznie (język przeglądarki)',
+    save_settings: 'Zapisz ustawienia', settings_saved: 'Ustawienia zapisane',
+    settings_note: 'Widz może sam zmieniać tryb, okno i język — to tylko wartości startowe (jego wybór zapamiętuje przeglądarka).',
+    db_title: 'Baza danych — eksport / import', export: '⤓ Eksportuj bazę (.db)', import: '⤒ Importuj i scal bazę…',
+    import_note: 'Import scala drugą bazę z tą: teamy łączone po nazwie, gracze po (serwer, nick w grze), próbki po (gracz, czas) — historia z obu baz układa się chronologicznie, duplikaty są pomijane. Import tego samego pliku dwa razy niczego nie zmienia. Do przenoszenia używaj eksportu (spójna kopia także w trakcie pracy).',
+    uploading: 'Wysyłanie {0}…', merged: '<span class="ok">✓ Scalono:</span> teamów +{0}, graczy +{1}, próbek +{2} (z {3} w pliku)',
+    cycle_started: 'Cykl zbierania uruchomiony',
+    add_title: 'Dodaj gracza', edit_title: 'Edytuj gracza',
+    char_name: 'Nick w grze', char_ph: 'nazwa postaci', server: 'Serwer', search: '🔍 Szukaj',
+    search_hint: 'Wpisz nick i naciśnij Enter. „Global” przeszukuje wszystkie regiony — kliknij wynik, żeby wybrać postać i serwer.',
+    global: '🌍 Global — wszystkie regiony', searching: 'Szukam…', nothing_found: 'Nic nie znaleziono.', type_name: 'Wpisz nick w grze',
+    display_name: 'Wyświetlany nick (streamer)', display_ph: 'np. KanonXO', no_team_opt: '— bez teamu —',
+    line_color: 'Kolor linii', color_auto: 'automatycznie (team / paleta)', sort: 'Kolejność (sort)', active_collect: 'Aktywny (zbieraj)',
+    drop: 'Upuść obrazek albo kliknij, żeby wybrać plik', drop_note: 'serwer przytnie go do kwadratu, przeskaluje do 192×192 i zapisze w bazie',
+    use_game: 'Użyj z gry', use_game_title: 'Usuń wgrany avatar — użyty zostanie portret postaci z gry',
+    av_uploaded: 'wgrany avatar (zapisany w bazie)', av_game: 'portret z gry (kopia w bazie)', av_pending: '{0} — zostanie przycięty i zapisany w bazie po kliknięciu „Zapisz”',
+    av_cleared: 'wgrany avatar zostanie usunięty — użyty będzie portret z gry',
+    not_image: 'To nie jest obrazek', too_big: 'Plik za duży (max 15 MB)', convert_failed: 'konwersja nie powiodła się', load_failed: 'Nie udało się wczytać obrazka',
+    need_char_server: 'Podaj nick w grze i serwer (albo wybierz postać z wyników wyszukiwania)', avatar_failed: 'Gracz zapisany, ale avatar nie: {0}',
+    player_added: 'Dodano gracza — pierwszy odczyt za chwilę', confirm_player_del: 'Usunąć {0} razem z całą historią ({1} próbek)?',
+    delete_player: 'Usuń gracza', cancel: 'Anuluj', servers_failed: 'Nie udało się pobrać listy serwerów: {0}', error: 'Błąd',
+    region_eu: 'Europa', region_nae: 'NA East', region_naw: 'NA West', region_la: 'Ameryka Płd.', region_as: 'Azja',
+  },
+  en: {
+    login_title: '🔒 Admin panel', password: 'Password', login: 'Log in', login_required: 'login required',
+    open_chart: '↗ Chart', fetch_all: '⟳ Collect now (all active)', logout: 'Log out',
+    worker_status: 'Worker status', st_interval: 'Interval', st_next: 'Next cycle', st_last: 'Last cycle', st_samples: 'Samples in db', st_size: 'Database size', st_file: 'Database file',
+    in_x: 'in {0}', running: 'running…',
+    players: 'Players', add_player: '+ Add player',
+    players_note: '<b>Active</b> = the worker collects data every interval. <b>On chart</b> = shown on the public page. You can collect in the background without showing a player.',
+    th_player: 'Player', th_char: 'Character', th_team: 'Team', th_samples: 'Samples', th_last: 'Last update', th_active: 'Active', th_visible: 'On chart',
+    ago: '{0} ago', never: 'never', unresolved: 'unresolved', tog_active: 'Worker collects data', tog_visible: 'Shown on the chart', fetch_now: 'Fetch data now', edit: 'Edit',
+    no_players: 'No players yet — click “+ Add player”.', saved: 'Saved', queued: 'Fetch queued…',
+    teams: 'Teams', new_team: '+ New team', teams_note: 'Team color = avatar ring and base line color of the team’s players (a player can have its own color).',
+    sort_title: 'order', save: 'Save', delete: 'Delete', team_saved: 'Team saved', deleted: 'Deleted', no_teams: 'No teams.',
+    confirm_team_del: 'Delete this team? Its players will have no team.', team_name_prompt: 'Team name:', team_added: 'Team added',
+    chart_settings: 'Chart settings', page_title: 'Page title', default_mode: 'Default mode', default_range: 'Default time window', default_lang: 'Default page language',
+    opt_dv: 'Daevanion (total)', opt_god: 'God stats (total)', opt_weapon: 'Weapon (+enchant ◆exceed)', opt_stigma: 'Stigmas Σ', opt_level: 'Level',
+    d3: '3 days', d7: '7 days', d30: '30 days', all: 'All', lang_auto: 'Automatic (browser language)',
+    save_settings: 'Save settings', settings_saved: 'Settings saved',
+    settings_note: 'Viewers can change the mode, window and language themselves — these are just the defaults (their choice is remembered by the browser).',
+    db_title: 'Database — export / import', export: '⤓ Export database (.db)', import: '⤒ Import & merge database…',
+    import_note: 'Import merges another database into this one: teams are matched by name, players by (server, character name), samples by (player, time) — the history of both databases interleaves chronologically and duplicates are skipped. Importing the same file twice changes nothing. Use export to move data (a consistent copy even while running).',
+    uploading: 'Uploading {0}…', merged: '<span class="ok">✓ Merged:</span> teams +{0}, players +{1}, samples +{2} (of {3} in file)',
+    cycle_started: 'Collection cycle started',
+    add_title: 'Add player', edit_title: 'Edit player',
+    char_name: 'Character name', char_ph: 'in-game name', server: 'Server', search: '🔍 Search',
+    search_hint: 'Type a name and press Enter. “Global” searches every region — click a result to pick the character and its server.',
+    global: '🌍 Global — all regions', searching: 'Searching…', nothing_found: 'Nothing found.', type_name: 'Enter a character name',
+    display_name: 'Display name (streamer)', display_ph: 'e.g. KanonXO', no_team_opt: '— no team —',
+    line_color: 'Line color', color_auto: 'automatic (team / palette)', sort: 'Order (sort)', active_collect: 'Active (collect)',
+    drop: 'Drop an image or click to choose a file', drop_note: 'the server crops it to a square, resizes it to 192×192 and stores it in the database',
+    use_game: 'Use in-game', use_game_title: 'Remove the uploaded avatar — the in-game portrait will be used',
+    av_uploaded: 'uploaded avatar (stored in the database)', av_game: 'in-game portrait (copy in the database)', av_pending: '{0} — will be cropped and stored when you click “Save”',
+    av_cleared: 'the uploaded avatar will be removed — the in-game portrait will be used',
+    not_image: 'Not an image', too_big: 'File too large (max 15 MB)', convert_failed: 'conversion failed', load_failed: 'Could not load the image',
+    need_char_server: 'Enter the character name and server (or pick a character from the search results)', avatar_failed: 'Player saved, but the avatar was not: {0}',
+    player_added: 'Player added — first update in a moment', confirm_player_del: 'Delete {0} with its whole history ({1} samples)?',
+    delete_player: 'Delete player', cancel: 'Cancel', servers_failed: 'Could not load the server list: {0}', error: 'Error',
+    region_eu: 'Europe', region_nae: 'NA East', region_naw: 'NA West', region_la: 'South America', region_as: 'Asia',
+  },
+};
+const normLang = l => (l || '').toLowerCase().startsWith('pl') ? 'pl' : (l || '').toLowerCase().startsWith('en') ? 'en' : '';
+let LANG = normLang(new URLSearchParams(location.search).get('lang')) || normLang(localStorage.getItem('a2t.adminLang')) || (normLang(navigator.language) === 'pl' ? 'pl' : 'en');
+let nf = new Intl.NumberFormat(LANG === 'en' ? 'en-US' : 'pl-PL');
+function T(key, ...args) {
+  let v = (I18N[LANG] && I18N[LANG][key]) ?? I18N.pl[key] ?? key;
+  args.forEach((a, i) => { v = v.replace('{' + i + '}', a); });
+  return v;
+}
+function applyStatic() {
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = T(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = T(el.dataset.i18nHtml); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = T(el.dataset.i18nTitle); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = T(el.dataset.i18nPh); });
+  document.querySelectorAll('.langSw button').forEach(b => b.classList.toggle('on', b.dataset.l === LANG));
+}
+function setLang(l) {
+  LANG = l;
+  nf = new Intl.NumberFormat(LANG === 'en' ? 'en-US' : 'pl-PL');
+  try { localStorage.setItem('a2t.adminLang', l); } catch {}
+  applyStatic();
+  if (servers.length) fillServers();
+  if (D) render();
+  if (editing !== undefined && $('#pmodal').classList.contains('show')) $('#pmTitle').textContent = T(editing ? 'edit_title' : 'add_title');
+  if (lastHits) renderHits(lastHits.hits, lastHits.name);
+}
+document.querySelectorAll('.langSw button').forEach(b => b.onclick = () => setLang(b.dataset.l));
+
+const pad2 = n => String(n).padStart(2, '0');
+function fmtDur(sec) { sec = Math.max(0, Math.round(sec)); if (sec < 60) return sec + 's'; const m = Math.floor(sec / 60), h = Math.floor(m / 60), d = Math.floor(h / 24); if (m < 60) return m + 'm'; if (h < 24) return h + 'h' + (m % 60 ? ' ' + m % 60 + 'm' : ''); return d + 'd' + (h % 24 ? ' ' + h % 24 + 'h' : ''); }
+function fmtTime(ts) { if (!ts) return '—'; const d = new Date(ts * 1000); return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+function fmtBytes(b) { return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1024).toFixed(0) + ' kB'; }
+const initials = n => (n || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+function toast(msg, bad) { const el = $('#toast'); el.textContent = msg; el.className = 'toast show' + (bad ? ' bad' : ''); clearTimeout(toast.h); toast.h = setTimeout(() => el.className = 'toast', 2800); }
+
+async function api(path, body, raw) {
+  const opt = { headers: { 'X-A2T': '1', 'X-Lang': LANG }, cache: 'no-store' };
+  if (body !== undefined) {
+    opt.method = 'POST';
+    if (raw) { opt.body = body; opt.headers['Content-Type'] = 'application/octet-stream'; }
+    else { opt.body = JSON.stringify(body); opt.headers['Content-Type'] = 'application/json'; }
+  }
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) { showLogin(); throw new Error(j.error || T('login_required')); }
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+let D = null; // overview
+let servers = [];
+let editing, lastHits = null;
+
+function showLogin() { $('#app').hidden = true; $('#loginView').hidden = false; $('#pw').focus(); }
+$('#loginForm').onsubmit = async e => {
+  e.preventDefault();
+  try { await api('/api/admin/login', { password: $('#pw').value }); $('#loginView').hidden = true; boot(); }
+  catch (err) { $('#loginErr').textContent = err.message; }
+};
+$('#logout').onclick = async () => { await api('/api/admin/logout', {}); location.reload(); };
+
+async function load() {
+  D = await api('/api/admin/overview');
+  render();
+}
+function teamById(id) { return D.teams.find(x => x.id === id); }
+
+function render() {
+  const st = D.status, now = Date.now() / 1000, skew = st.now - now;
+  const nowS = () => Date.now() / 1000 + skew;
+  const next = st.next_cycle - nowS();
+  const running = st.cycle_started > st.last_cycle_end;
+  $('#stats').innerHTML = [
+    [T('st_interval'), Math.round(st.interval / 60) + ' min'],
+    [T('st_next'), next > 0 ? T('in_x', fmtDur(next)) : (running ? T('running') : '—')],
+    [T('st_last'), st.last_cycle_end ? fmtTime(st.last_cycle_end) + ' · ' + esc(st.last_result) : '—'],
+    [T('st_samples'), nf.format(st.samples)],
+    [T('st_size'), fmtBytes(st.db_size)],
+    [T('st_file'), `<span class="v small">${esc(st.db_path)}</span>`, true],
+  ].map(([k, v, wide]) => `<div class="stat ${wide ? 'wide' : ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  $('#logout').hidden = !st.password_set;
+
+  $('#pcount').textContent = `(${D.players.length})`;
+  $('#players tbody').innerHTML = D.players.map(p => {
+    const team = teamById(p.team_id);
+    const ring = team ? team.color : (p.color || '#3a4658');
+    const last = p.last_ok_at ? `<span class="${now - p.last_ok_at < st.interval * 2.2 ? 'ok' : ''}">${T('ago', fmtDur(nowS() - p.last_ok_at))}</span>` : `<span class="muted">${T('never')}</span>`;
+    const err = p.last_error ? `<div class="err">⚠ ${esc(p.last_error)}</div>` : '';
+    return `<tr data-id="${p.id}">
+      <td><div class="who"><div class="av" style="--c:${esc(ring)};background-image:${p.avatar ? `url('${esc(p.avatar)}')` : 'none'}">${p.avatar ? '' : esc(initials(p.display_name))}</div><div><b>${esc(p.display_name)}</b><small>${p.color ? `<span class="sw" style="background:${esc(p.color)}"></span>` : ''}#${p.id}</small></div></div></td>
+      <td>${esc(p.char_name)}<br><small class="muted">${esc(p.server_name || p.server_id)}${p.class_name ? ' · ' + esc(p.class_name) + ' · Lv ' + p.level : ''}${p.character_id ? '' : ` · <span style="color:var(--warn)">${T('unresolved')}</span>`}</small></td>
+      <td><select data-team="${p.id}" style="min-width:120px"><option value="0">—</option>${D.teams.map(x => `<option value="${x.id}" ${x.id === p.team_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></td>
+      <td class="num">${p.last_cp ? nf.format(p.last_cp) : '—'}</td>
+      <td class="num">${p.last_il || '—'}</td>
+      <td class="num">${nf.format(p.samples)}</td>
+      <td>${last}${err}</td>
+      <td><label class="switch" title="${T('tog_active')}"><input type="checkbox" data-tog="active" ${p.active ? 'checked' : ''}><span></span></label></td>
+      <td><label class="switch" title="${T('tog_visible')}"><input type="checkbox" data-tog="visible" ${p.visible ? 'checked' : ''}><span></span></label></td>
+      <td><div class="row" style="flex-wrap:nowrap"><button class="btn small" data-act="fetch" title="${T('fetch_now')}">⟳</button><button class="btn small" data-act="edit">${T('edit')}</button></div></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="10" class="muted" style="padding:20px;text-align:center">${T('no_players')}</td></tr>`;
+
+  document.querySelectorAll('#players tbody tr[data-id]').forEach(tr => {
+    const id = +tr.dataset.id;
+    tr.querySelectorAll('[data-tog]').forEach(cb => cb.onchange = async () => {
+      try { await api(`/api/admin/player/${id}/toggle`, { field: cb.dataset.tog, value: cb.checked }); toast(T('saved')); load(); }
+      catch (e) { toast(e.message, true); cb.checked = !cb.checked; }
+    });
+    tr.querySelector('[data-team]').onchange = async e => {
+      const p = D.players.find(x => x.id === id);
+      try { await api('/api/admin/player/save', { ...playerPayload(p), team_id: +e.target.value }); toast(T('saved')); load(); } catch (err) { toast(err.message, true); }
+    };
+    tr.querySelector('[data-act=fetch]').onclick = async () => {
+      try { await api(`/api/admin/player/${id}/fetch`, {}); toast(T('queued')); setTimeout(load, 4000); } catch (e) { toast(e.message, true); }
+    };
+    tr.querySelector('[data-act=edit]').onclick = () => openPlayer(D.players.find(x => x.id === id));
+  });
+
+  // teams
+  $('#teams').innerHTML = D.teams.map(x => `<div class="team" data-id="${x.id}">
+      <input type="color" value="${esc(x.color)}" data-f="color"><input type="text" value="${esc(x.name)}" data-f="name" maxlength="40">
+      <input type="number" value="${x.sort}" data-f="sort" title="${T('sort_title')}">
+      <button class="btn small" data-act="save">${T('save')}</button><button class="btn small danger" data-act="del">${T('delete')}</button></div>`).join('')
+    || `<div class="muted">${T('no_teams')}</div>`;
+  document.querySelectorAll('#teams .team').forEach(row => {
+    const id = +row.dataset.id;
+    const val = f => row.querySelector(`[data-f=${f}]`).value;
+    row.querySelector('[data-act=save]').onclick = async () => {
+      try { await api('/api/admin/team/save', { id, name: val('name'), color: val('color'), sort: +val('sort') }); toast(T('team_saved')); load(); } catch (e) { toast(e.message, true); }
+    };
+    row.querySelector('[data-act=del]').onclick = async () => {
+      if (!confirm(T('confirm_team_del'))) return;
+      try { await api(`/api/admin/team/${id}/delete`, {}); toast(T('deleted')); load(); } catch (e) { toast(e.message, true); }
+    };
+  });
+
+  // settings (only filled once, so a half-edited form isn't overwritten by the auto-refresh)
+  if (!render.settingsDone) {
+    render.settingsDone = true;
+    $('#sTitle').value = D.settings.title;
+    $('#sMode').value = D.settings.default_mode.split(':')[0];
+    $('#sRange').value = D.settings.default_range;
+    $('#sLang').value = D.settings.default_lang || 'auto';
+  }
+}
+
+$('#addTeam').onclick = async () => {
+  const name = prompt(T('team_name_prompt')); if (!name) return;
+  const palette = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767'];
+  try { await api('/api/admin/team/save', { name, color: palette[D.teams.length % palette.length], sort: D.teams.length }); toast(T('team_added')); load(); } catch (e) { toast(e.message, true); }
+};
+$('#settingsForm').onsubmit = async e => {
+  e.preventDefault();
+  try { await api('/api/admin/settings', { title: $('#sTitle').value, default_mode: $('#sMode').value, default_range: $('#sRange').value, default_lang: $('#sLang').value }); toast(T('settings_saved')); } catch (err) { toast(err.message, true); }
+};
+$('#fetchAll').onclick = async () => { try { await api('/api/admin/fetch_all', {}); toast(T('cycle_started')); setTimeout(load, 5000); } catch (e) { toast(e.message, true); } };
+
+$('#importFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('#importRes').textContent = T('uploading', f.name);
+  try {
+    const buf = await f.arrayBuffer();
+    const r = await api('/api/admin/import', buf, true);
+    $('#importRes').innerHTML = T('merged', r.teams_added, r.players_added, nf.format(r.samples_added), nf.format(r.samples_total));
+    load();
+  } catch (err) { $('#importRes').innerHTML = `<span class="err">✗ ${esc(err.message)}</span>`; }
+  e.target.value = '';
+};
+
+// ---------------------------------------------------------------- player modal
+let avatarAction = 'keep', avatarData = '', pickedCharId = '';
+function playerPayload(p) {
+  return { id: p.id, display_name: p.display_name, char_name: p.char_name, server_id: p.server_id, server_name: p.server_name, character_id: p.character_id, team_id: p.team_id, color: p.color, active: p.active, visible: p.visible, sort: p.sort, avatar_action: 'keep', avatar: '' };
+}
+function regionLabel(r) { return T('region_' + r) || r; }
+function regionShort(r) { return ({ eu: 'EU', nae: 'NA-E', naw: 'NA-W', la: 'SA', as: 'Asia' })[r] || (r || '').toUpperCase(); }
+function fillServers() {
+  const sel = $('#pmServer'), keep = sel.value;
+  const raceName = { 1: 'Elyos', 2: 'Asmodian' };
+  const groups = {};
+  for (const s of servers) (groups[s.region + '|' + s.race] ||= []).push(s);
+  sel.innerHTML = `<option value="">${T('global')}</option>` + Object.entries(groups).map(([k, list]) => {
+    const [r, race] = k.split('|');
+    return `<optgroup label="${esc(regionLabel(r))} · ${raceName[race] || race}">${list.map(s => `<option value="${s.id}" data-name="${esc(s.name)}">${esc(s.name)} (${regionShort(r)})</option>`).join('')}</optgroup>`;
+  }).join('');
+  ensureServerOption(+keep, '');
+  sel.value = keep;
+}
+function ensureServerOption(id, name) {
+  if (!id || [...$('#pmServer').options].some(o => +o.value === id)) return;
+  $('#pmServer').insertAdjacentHTML('beforeend', `<option value="${id}" data-name="${esc(name)}">${esc(name || id)}</option>`);
+}
+async function loadServers() {
+  if (!servers.length) {
+    try { servers = await api('/api/admin/servers'); } catch (e) { toast(T('servers_failed', e.message), true); }
+  }
+  fillServers();
+}
+function setAvatarPreview(url, name, ring) {
+  const el = $('#pmAvatar');
+  el.style.setProperty('--c', ring || '#444');
+  el.style.backgroundImage = url ? `url('${url}')` : 'none';
+  el.textContent = url ? '' : initials(name);
+}
+async function openPlayer(p) {
+  editing = p || null; avatarAction = 'keep'; avatarData = ''; pickedCharId = ''; avatarFile = null; lastHits = null;
+  $('#pmAvNote').textContent = p && p.has_avatar ? T('av_uploaded') : p && p.has_game_avatar ? T('av_game') : '';
+  $('#pmTitle').textContent = T(p ? 'edit_title' : 'add_title');
+  $('#pmDelete').hidden = !p;
+  $('#pmDisplay').value = p ? p.display_name : '';
+  $('#pmChar').value = p ? p.char_name : '';
+  $('#pmTeam').innerHTML = `<option value="0">${T('no_team_opt')}</option>` + D.teams.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  $('#pmTeam').value = p ? p.team_id : 0;
+  $('#pmColorAuto').checked = !(p && p.color);
+  $('#pmColor').value = (p && p.color) || '#3987e5';
+  $('#pmSort').value = p ? p.sort : D.players.length;
+  $('#pmActive').checked = p ? p.active : true;
+  $('#pmVisible').checked = p ? p.visible : true;
+  $('#pmHits').innerHTML = '';
+  setAvatarPreview(p && p.avatar, p ? p.display_name : '', p && teamById(p.team_id) ? teamById(p.team_id).color : '#444');
+  $('#pmodal').classList.add('show');
+  await loadServers();
+  if (p) { ensureServerOption(p.server_id, p.server_name); $('#pmServer').value = p.server_id; }
+  else $('#pmServer').value = '';
+  $('#pmChar').focus();
+}
+function closePlayer() { $('#pmodal').classList.remove('show'); }
+$('#addPlayer').onclick = () => openPlayer(null);
+$('#pmCancel').onclick = closePlayer;
+$('#pmodal').addEventListener('mousedown', e => { if (e.target.id === 'pmodal') closePlayer(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
+$('#pmTeam').onchange = () => { const x = teamById(+$('#pmTeam').value); $('#pmAvatar').style.setProperty('--c', x ? x.color : '#444'); };
+$('#pmChar').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#pmSearch').click(); } });
+$('#pmChar').addEventListener('input', () => { pickedCharId = ''; });
+
+function renderHits(hits, name) {
+  lastHits = { hits, name };
+  if (!hits.length) { $('#pmHits').innerHTML = `<div class="msg muted">${T('nothing_found')}</div>`; return; }
+  $('#pmHits').innerHTML = hits.map((h, i) => `<div class="hit ${h.characterId === pickedCharId ? 'sel' : ''}" data-i="${i}">
+      <img src="${esc(h.profileImageUrl)}" alt="" loading="lazy">
+      <div><div class="hn">${esc(h.name)}</div>
+        <div class="hm"><span>${esc(h.className || '?')}</span><span class="lv">Lv.${h.level}</span><span>${esc(h.serverName)} (${regionShort(h.region)})</span></div></div>
+      <span class="race ${h.race === 1 ? 'elyos' : 'asmo'}">${h.race === 1 ? 'Elyos' : 'Asmodian'}</span>
+    </div>`).join('');
+  $('#pmHits').querySelectorAll('.hit').forEach(el => el.onclick = () => pickHit(hits[+el.dataset.i], el));
+}
+function pickHit(h, el) {
+  $('#pmChar').value = h.name;
+  ensureServerOption(h.serverId, h.serverName);
+  $('#pmServer').value = h.serverId;
+  pickedCharId = h.characterId;
+  if (!$('#pmDisplay').value) $('#pmDisplay').value = h.name;
+  if (!avatarFile && !(editing && editing.has_avatar)) setAvatarPreview(h.profileImageUrl, h.name, $('#pmAvatar').style.getPropertyValue('--c'));
+  $('#pmHits').querySelectorAll('.hit').forEach(x => x.classList.toggle('sel', x === el));
+}
+$('#pmSearch').onclick = async () => {
+  const name = $('#pmChar').value.trim(); const server = $('#pmServer').value;
+  if (!name) return toast(T('type_name'), true);
+  $('#pmHits').innerHTML = `<div class="msg muted">${T('searching')}</div>`;
+  try {
+    const hits = await api(`/api/admin/search?name=${encodeURIComponent(name)}&server=${server || 0}`);
+    renderHits(hits, name);
+    // a single exact match is picked automatically
+    const exact = hits.filter(h => h.name.toLowerCase() === name.toLowerCase());
+    if (exact.length === 1) pickHit(exact[0], $('#pmHits').querySelector(`.hit[data-i="${hits.indexOf(exact[0])}"]`));
+  } catch (e) { $('#pmHits').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+};
+
+// avatar: the original file is uploaded; the server crops it to a square, resizes it to 192×192
+// and stores it in the database. Formats the server can't decode (WebP/AVIF/HEIC/SVG…) are
+// first converted to PNG by the browser.
+const SERVER_FORMATS = ['image/png', 'image/jpeg', 'image/gif', 'image/bmp'];
+let avatarFile = null;
+function toPng(file) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1024 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      c.toBlob(b => b ? res(b) : rej(new Error(T('convert_failed'))), 'image/png');
+    };
+    img.onerror = () => rej(new Error(T('load_failed')));
+    img.src = URL.createObjectURL(file);
+  });
+}
+async function handleImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) return toast(T('not_image'), true);
+  if (file.size > 15 * 1024 * 1024) return toast(T('too_big'), true);
+  try {
+    avatarFile = SERVER_FORMATS.includes(file.type) ? file : await toPng(file);
+  } catch (e) { return toast(e.message, true); }
+  avatarAction = 'keep'; avatarData = '';
+  setAvatarPreview(URL.createObjectURL(avatarFile), '', $('#pmAvatar').style.getPropertyValue('--c'));
+  $('#pmAvNote').textContent = T('av_pending', file.name);
+}
+$('#pmDrop').onclick = () => $('#pmFile').click();
+$('#pmFile').onchange = e => handleImageFile(e.target.files[0]);
+['dragenter', 'dragover'].forEach(ev => $('#pmDrop').addEventListener(ev, e => { e.preventDefault(); $('#pmDrop').classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => $('#pmDrop').addEventListener(ev, e => { e.preventDefault(); $('#pmDrop').classList.remove('over'); }));
+$('#pmDrop').addEventListener('drop', e => handleImageFile(e.dataTransfer.files[0]));
+$('#pmAvClear').onclick = () => {
+  avatarAction = 'clear'; avatarData = ''; avatarFile = null;
+  $('#pmAvNote').textContent = T('av_cleared');
+  setAvatarPreview(editing && editing.has_game_avatar ? `/avatar/${editing.id}?game=1&t=${Date.now()}` : '', $('#pmDisplay').value, $('#pmAvatar').style.getPropertyValue('--c'));
+};
+
+$('#pmSave').onclick = async () => {
+  const sel = $('#pmServer').selectedOptions[0];
+  const serverId = +$('#pmServer').value;
+  const body = {
+    id: editing ? editing.id : 0,
+    display_name: $('#pmDisplay').value.trim(),
+    char_name: $('#pmChar').value.trim(),
+    server_id: serverId,
+    server_name: sel ? (sel.dataset.name || '') : '',
+    character_id: pickedCharId,
+    team_id: +$('#pmTeam').value,
+    color: $('#pmColorAuto').checked ? '' : $('#pmColor').value,
+    active: $('#pmActive').checked,
+    visible: $('#pmVisible').checked,
+    sort: +$('#pmSort').value || 0,
+    avatar_action: avatarAction,
+    avatar: avatarData,
+  };
+  if (!body.char_name || !serverId) return toast(T('need_char_server'), true);
+  $('#pmSave').disabled = true;
+  try {
+    const r = await api('/api/admin/player/save', body);
+    if (avatarFile) {
+      try { await api(`/api/admin/player/${r.id}/avatar`, avatarFile, true); }
+      catch (e) { toast(T('avatar_failed', e.message), true); load(); $('#pmSave').disabled = false; return; }
+    }
+    toast(editing ? T('saved') : T('player_added'));
+    closePlayer(); load(); setTimeout(load, 5000);
+  } catch (e) { toast(e.message, true); }
+  $('#pmSave').disabled = false;
+};
+$('#pmColor').oninput = () => { $('#pmColorAuto').checked = false; };
+$('#pmDelete').onclick = async () => {
+  if (!editing || !confirm(T('confirm_player_del', editing.display_name, editing.samples))) return;
+  try { await api(`/api/admin/player/${editing.id}/delete`, {}); toast(T('deleted')); closePlayer(); load(); } catch (e) { toast(e.message, true); }
+};
+
+async function boot() {
+  try {
+    const me = await api('/api/admin/me');
+    if (!me.authed) return showLogin();
+    $('#app').hidden = false;
+    await load();
+    setInterval(() => { if (!document.hidden && !$('#pmodal').classList.contains('show')) load().catch(() => {}); }, 15000);
+  } catch (e) { if (!$('#loginView').hidden) return; document.body.innerHTML = `<div class="wrap"><div class="card"><h2>${T('error')}</h2><p>${esc(e.message)}</p></div></div>`; }
+}
+applyStatic();
+boot();
+</script>
+</body>
+</html>

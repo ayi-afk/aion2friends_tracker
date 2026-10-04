@@ -1,0 +1,21 @@
+# docker compose up -d --build      (run build_linux.bat first)
+# The admin password comes from the environment or an .env file next to this file:
+#   A2T_PASSWORD=secret
+services:
+  aion2tracker:
+    build: .
+    image: aion2tracker
+    container_name: aion2tracker
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # required: without a password the admin panel is unusable through Docker (loopback only)
+      A2T_PASSWORD: ${A2T_PASSWORD:?set A2T_PASSWORD (env or .env file)}
+    volumes:
+      - aion2data:/data
+    # extra flags, e.g. a different collection interval:
+    # command: ["--interval", "10"]
+
+volumes:
+  aion2data:
